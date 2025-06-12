@@ -1,8 +1,5 @@
 # hyperwisor-iot-arduino-library
 
-````markdown
-# HyperwisorIOT Library
-
 **HyperwisorIOT** is an abstraction layer for ESP32 devices that simplifies WebSocket communication, Wi-Fi management, and IoT command execution. It is built on top of the [`nikolaindustry-realtime`]library, and is designed to make your IoT devices plug-and-play for real-time applications.
 
 ---
@@ -24,8 +21,6 @@
 3. Open the Arduino IDE and include the library in your sketch:
    ```cpp
    #include <hyperwisor-iot.h>
-````
-
 ---
 
 ## 🧪 Example Usage
@@ -52,7 +47,7 @@ void loop() {
 When you call `hypervisor.begin(...)`, it:
 
 1. Connects to Wi-Fi using the given SSID and password.
-2. Initializes a WebSocket connection to the Nikola Industry server.
+2. Initializes a connection to the nikolaindustry-realtime server.
 3. Registers a built-in message handler that deserializes JSON and prints it.
 4. Provides a `.loop()` function that must be called inside your `loop()` to keep the connection alive.
 
