@@ -282,6 +282,20 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
   userCommandCallback = cb;
 }
 
+void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder) {
+  DynamicJsonDocument doc(512);  // Adjust size as needed
+  JsonObject root = doc.to<JsonObject>();
+
+  root["targetId"] = targetId;
+
+  JsonObject payload = root.createNestedObject("payload");
+  payloadBuilder(payload);  // Let user fill the payload
+
+  realtime.sendJson(root);  // ✅ Pass JsonObject directly
+}
+
+
+
 void HyperwisorIOT::performOTA(const char *otaUrl)
 {
   String firmwarefeedback;
