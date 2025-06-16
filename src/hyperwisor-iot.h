@@ -10,6 +10,7 @@
 #include <DNSServer.h>
 #include <HTTPClient.h>
 
+typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
 class HyperwisorIOT
 {
@@ -18,13 +19,15 @@ public:
   void begin();
   void loop();
 
+  // User-defined command callback
+  void setUserCommandHandler(UserCommandCallback cb);
+
 private:
   // WiFi & Real-time Communication
   nikolaindustryrealtime realtime;
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;
-
 
   // Core functions
   void setupMessageHandler();
@@ -35,6 +38,7 @@ private:
   void connectToWiFi();
   String getSuccessHtml();
   String getErrorHtml(String errorMessage);
+  UserCommandCallback userCommandCallback = nullptr;
 
   // Credentials and config
   String ssid, password, userid, deviceid, productid, email, loaclip, macid, newtarget, versionid;
