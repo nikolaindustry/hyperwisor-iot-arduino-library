@@ -21,6 +21,7 @@ public:
 
   // User-defined command callback
   void setUserCommandHandler(UserCommandCallback cb);
+  void sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder);
 
 private:
   // WiFi & Real-time Communication
