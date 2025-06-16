@@ -1,26 +1,36 @@
+
 # hyperwisor-iot-arduino-library
 
-**HyperwisorIOT** is an abstraction layer for ESP32 devices that simplifies WebSocket communication, Wi-Fi management, and IoT command execution. It is built on top of the [`nikolaindustry-realtime`]library, and is designed to make your IoT devices plug-and-play for real-time applications.
+**HyperwisorIOT** is a powerful abstraction layer for ESP32-based IoT devices. It handles Wi-Fi provisioning, real-time communication, OTA updates, and GPIO management out of the box. Built on top of the [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime) protocol, it helps developers build smart, connected devices with minimal code.
 
----
 
 ## 📦 Features
 
-- 🚀 Automatic Wi-Fi connection
-- 🌐 Seamless integration with Nikola Industry Realtime WebSocket backend
-- 📩 Built-in JSON command handler (extensible)
-- 🔁 Background loop function for WebSocket keep-alive
-- 🧩 Designed for extensibility — easily add logic for relays, I2C, RS485, etc.
+* 🚀 Automatic Wi-Fi connection using stored credentials
+* 📶 AP-mode fallback + web-based provisioning page
+* 🌐 Real-time communication using `nikolaindustry-realtime`
+* 📩 Built-in JSON command parser with custom extensibility
+* 🛠️ GPIO control via commands (`pinMode`, `digitalWrite`)
+* 🔁 Continuous background loop with nikolaindustry-realtime + HTTP handling
+* 🔧 User command handler support via lambda functions
+* 🌍 Built-in DNS redirection when in AP mode
+* 🔄 OTA firmware update with version tracking
+* 🧠 Smart command routing via `from` → `sendTo()` pairing
+* ✅ Command response feedback through real-time socket
+* 🔐 Preferences-based persistent storage
 
 ---
 
 ## 🔧 Installation
 
-1. Download or clone this repository.
-2. Add the folder to your Arduino `libraries/` directory.
-3. Open the Arduino IDE and include the library in your sketch:
+1. Clone or download this repository.
+2. Place the folder into your Arduino `libraries/` directory.
+3. Include the library in your sketch:
+
    ```cpp
    #include <hyperwisor-iot.h>
+   ```
+
 ---
 
 ## 🧪 Example Usage
@@ -36,13 +46,11 @@ void setup() {
   Serial.begin(115200);
   hyper.begin();
 
-
   hyper.setUserCommandHandler([](JsonObject& msg) {
     if (msg.containsKey("from")) {
       from = msg["from"].as<String>();
       Serial.println("Message from: " + from);
     }
-
 
     if (!msg.containsKey("payload")) return;
     JsonObject payload = msg["payload"];
@@ -52,15 +60,12 @@ void setup() {
       const char* command = commandObj["command"];
 
       if (strcmp(command, "CUSTOM_COMMAND") == 0) {
-        Serial.println("Handling CUSTOM_COMMAND in .ino");
-
         JsonArray actions = commandObj["actions"];
         for (JsonObject actionObj : actions) {
           const char* action = actionObj["action"];
           JsonObject params = actionObj["params"];
 
-          // 👉 Do custom logic here
-          Serial.printf("Custom action: %s\n", action);
+          Serial.printf("Action: %s\n", action);
           if (params.containsKey("value")) {
             Serial.printf("Value: %s\n", params["value"].as<const char*>());
           }
@@ -68,7 +73,6 @@ void setup() {
       }
     }
   });
-
 
   hyper.sendTo(from, [](JsonObject& payload) {
     JsonArray commands = payload.createNestedArray("commands");
@@ -90,47 +94,52 @@ void setup() {
 void loop() {
   hyper.loop();
 }
-
-
 ```
 
 ---
 
-## 🧠 Internals
+## ⚙️ Wi-Fi Provisioning
 
-When you call `hypervisor.begin(...)`, it:
+If the device can't connect to Wi-Fi, it starts in **AP Mode**, hosting an HTTP server and DNS server for provisioning. Access `192.168.4.1` and submit the form to set:
 
-1. Connects to Wi-Fi using the given SSID and password.
-2. Initializes a connection to the nikolaindustry-realtime server.
-3. Registers a built-in message handler that deserializes JSON and prints it.
-4. Provides a `.loop()` function that must be called inside your `loop()` to keep the connection alive.
+* `ssid`
+* `password`
+* `target_id`
+
+Upon success, the ESP32 saves credentials in NVS and restarts.
 
 ---
 
-## 📤 Receiving Commands
+## 🌐 Command Structure
 
-Once connected, the server can send messages in the following JSON format:
+Supports rich JSON messages from the server:
 
 ```json
 {
-  "from": "device-controller-001",
+  "from": "controller-xyz",
   "payload": {
     "commands": [
       {
-        "command": "CUSTOM_COMMAND",
+        "command": "GPIO_MANAGEMENT",
         "actions": [
           {
-            "action": "BUZZER_ON",
+            "action": "ON",
             "params": {
-              "value": "true",
-              "duration_ms": 2000
+              "gpio": 12,
+              "pinmode": "OUTPUT",
+              "status": "HIGH"
             }
-          },
+          }
+        ]
+      },
+      {
+        "command": "OTA",
+        "actions": [
           {
-            "action": "LED_BLINK",
+            "action": "ota_update",
             "params": {
-              "value": "fast",
-              "count": 3
+              "url": "https://firmware-server/update.bin",
+              "version": "v2.1.0"
             }
           }
         ]
@@ -138,41 +147,129 @@ Once connected, the server can send messages in the following JSON format:
     ]
   }
 }
-
 ```
 
-The message is automatically deserialized and passed to your command logic.
+---
+
+## 🔄 OTA Firmware Update
+
+Send an `OTA` command with `ota_update` action and a valid `url`. The library:
+
+* Downloads the binary via HTTPS
+* Validates and applies update
+* Sends status messages back to the `from` target
+* Restarts the device after update
+
+---
+
+## 🧠 Internals
+
+On `hyper.begin()`:
+
+1. Tries to connect to saved Wi-Fi
+2. Starts AP-mode if not configured
+3. Sets up DNS and HTTP provisioning
+4. Initializes nikolaindustry-realtime connection
+5. Loads `deviceid`, `ssid`, `email`, `productid`, and `versionid` from `Preferences`
+6. Registers default and user-provided command handlers
+
+---
+
+## 📤 Sending Data
+
+Use the `sendTo()` method to respond or send commands:
+
+```cpp
+hyper.sendTo(targetId, [](JsonObject& payload) {
+  JsonArray commands = payload.createNestedArray("commands");
+  // build your message
+});
+```
 
 ---
 
 ## 📚 Dependencies
 
-* [WiFi.h](https://www.arduino.cc/en/Reference/WiFi)
-* [ArduinoJson](https://arduinojson.org/)
-* [nikolaindustry-realtime](https://github.com/your-org/nikolaindustry-realtime)
+* [`WiFi.h`](https://www.arduino.cc/en/Reference/WiFi)
+* [`ArduinoJson`](https://arduinojson.org/)
+* [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime)
+* [`Preferences`](https://www.arduino.cc/en/Reference/Preferences)
+* [`Update`](https://www.arduino.cc/en/Reference/Update)
+* [`DNSServer`](https://github.com/esp8266/Arduino/blob/master/libraries/DNSServer/src/DNSServer.h)
 
-Make sure to install these via the Arduino Library Manager if not already included.
+Install all via Arduino Library Manager.
 
 ---
 
-## ✍️ Customize Your Logic
+## ✍️ Extend with Custom Logic
 
-Modify the lambda function inside `setupMessageHandler()` in `hyperwisor-iot.cpp` to add your own actions like:
+Implement in `setUserCommandHandler()` or customize inside the library to add:
 
-* Relay control (PCF8574)
-* RS485 communication
-* I2C LCD displays
-* OTA updates
+* I2C or RS485 actions
+* Relay and GPIO sequencing
+* Device diagnostics and self-tests
+* Integration with sensors (DHT, BMP, etc.)
+
+---
+
+## 🔐 Persistent Storage Keys
+
+| Key        | Purpose                 |
+| ---------- | ----------------------- |
+| `ssid`     | Wi-Fi SSID              |
+| `password` | Wi-Fi Password          |
+| `deviceid` | Unique ID for backend   |
+| `userid`   | Optional user field     |
+| `email`    | Optional user email     |
+| `firmware` | Last known firmware ver |
 
 ---
 
 ## 🧾 License
 
-This library is open-source under the MIT License.
+# Hyperwisor IoT Arduino Library License
+
+Copyright (c) 2025 NIKOLAINDUSTRY
+
+## License Type: Proprietary - All Rights Reserved
+
+This software and associated files (the "Library") are the exclusive property of **NIKOLAINDUSTRY**. You are **NOT** permitted to copy, modify, distribute, sublicense, or reverse engineer any part of this code without express written permission from NIKOLAINDUSTRY.
+
+### You MAY:
+- Use this Library **exclusively** with NIKOLAINDUSTRY hardware or software platforms.
+- Integrate the Library into closed-source commercial or industrial applications developed **in partnership with** NIKOLAINDUSTRY.
+- Contact NIKOLAINDUSTRY for licensing terms to enable distribution or broader use.
+
+### You MAY NOT:
+- Redistribute, sell, sublicense, or disclose this Library or any derivative works.
+- Modify or decompile the source code for any purpose other than evaluation or integration with authorized systems.
+- Use this Library in any open-source project, public-facing repository, or third-party product without prior written approval.
+
+## Disclaimers
+
+- **NO WARRANTY**: This software is provided "as is" without any warranties of any kind, whether express or implied, including but not limited to warranties of merchantability or fitness for a particular purpose.
+
+- **NO LIABILITY**: In no event shall NIKOLAINDUSTRY, its employees, or its affiliates be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including hardware damage, data loss, or system failure) arising in any way from the use or inability to use this Library.
+
+- **NOT FOR CRITICAL SYSTEMS**: This Library is **not certified** for use in life-support, nuclear, military, or other safety-critical systems. Use in such environments is **strictly prohibited**.
+
+## Enforcement
+
+Unauthorized use, duplication, or distribution of this Library may result in civil and criminal penalties and will be prosecuted to the maximum extent possible under law.
 
 ---
 
-## 🤝 Contribution
+For commercial licensing, OEM partnerships, or distribution rights, contact:
 
-Feel free to submit issues or pull requests to improve the logic handling, add examples, or support new protocols!
+**NIKOLAINDUSTRY**  
+Email: support@nikolaindustry.com  
+Website: [https://nikolaindustry.com](https://nikolaindustry.com)
+---
 
+## 🤝 Contribute
+
+Suggestions, bug fixes, and pull requests are welcome. Help evolve the library to support more protocols and automation use-cases!
+
+---
+
+Would you like a `.md` file download or integration into your repo as well?
