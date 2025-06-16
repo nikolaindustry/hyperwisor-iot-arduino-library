@@ -28,16 +28,44 @@
 ```cpp
 #include <hyperwisor-iot.h>
 
-HyperwisorIOT hypervisor;
+HyperwisorIOT hyper;
 
 void setup() {
   Serial.begin(115200);
-  hypervisor.begin("YourSSID", "YourPassword", "device-123456");
+  hyper.begin();
+
+  // 👇 Register your custom command handler
+  hyper.setUserCommandHandler([](JsonObject &msg) {
+    if (!msg.containsKey("payload")) return;
+    JsonObject payload = msg["payload"];
+    JsonArray commands = payload["commands"];
+
+    for (JsonObject commandObj : commands) {
+      const char* command = commandObj["command"];
+
+      if (strcmp(command, "CUSTOM_COMMAND") == 0) {
+        Serial.println("Handling CUSTOM_COMMAND in .ino");
+
+        JsonArray actions = commandObj["actions"];
+        for (JsonObject actionObj : actions) {
+          const char* action = actionObj["action"];
+          JsonObject params = actionObj["params"];
+
+          // 👉 Do custom logic here
+          Serial.printf("Custom action: %s\n", action);
+          if (params.containsKey("value")) {
+            Serial.printf("Value: %s\n", params["value"].as<const char*>());
+          }
+        }
+      }
+    }
+  });
 }
 
 void loop() {
-  hypervisor.loop();
+  hyper.loop();
 }
+
 ```
 
 ---
@@ -59,17 +87,24 @@ Once connected, the server can send messages in the following JSON format:
 
 ```json
 {
-  "from": "dashboard",
+  "from": "device-controller-001",
   "payload": {
     "commands": [
       {
-        "command": "I2C",
+        "command": "CUSTOM_COMMAND",
         "actions": [
           {
-            "action": "I2C_SEND",
+            "action": "BUZZER_ON",
             "params": {
-              "address": "0x3C",
-              "data": [0x01, 0x02]
+              "value": "true",
+              "duration_ms": 2000
+            }
+          },
+          {
+            "action": "LED_BLINK",
+            "params": {
+              "value": "fast",
+              "count": 3
             }
           }
         ]
@@ -77,6 +112,7 @@ Once connected, the server can send messages in the following JSON format:
     ]
   }
 }
+
 ```
 
 The message is automatically deserialized and passed to your command logic.
