@@ -195,75 +195,91 @@ void HyperwisorIOT::setupMessageHandler()
 {
   realtime.setOnMessageCallback([this](JsonObject &msg)
                                 {
-    if (!msg.containsKey("payload")) return;
+                                  if (!msg.containsKey("payload"))
+                                    return;
 
-    JsonObject payload = msg["payload"];
-    JsonArray commands = payload["commands"];
-      this->newtarget = msg["from"] | "";
+                                  JsonObject payload = msg["payload"];
+                                  JsonArray commands = payload["commands"];
+                                  this->newtarget = msg["from"] | "";
 
-    for (JsonObject commandObj : commands) {
-      const char* command = commandObj["command"];
+                                  for (JsonObject commandObj : commands)
+                                  {
+                                    const char *command = commandObj["command"];
 
-      if (strcmp(command, "GPIO_MANAGEMENT") == 0) {
-        JsonArray actions = commandObj["actions"];
+                                    if (strcmp(command, "GPIO_MANAGEMENT") == 0)
+                                    {
+                                      JsonArray actions = commandObj["actions"];
 
-        for (JsonObject actionObj : actions) {
-          const char* action = actionObj["action"];
-          JsonObject params = actionObj["params"];
+                                      for (JsonObject actionObj : actions)
+                                      {
+                                        const char *action = actionObj["action"];
+                                        JsonObject params = actionObj["params"];
 
-          // Extract parameters
-          int gpio = atoi(params["gpio"] | "0");
-          String pinmodeStr = params["pinmode"] | "OUTPUT";
-          String statusStr = params["status"] | "LOW";
+                                        // Extract parameters
+                                        int gpio = atoi(params["gpio"] | "0");
+                                        String pinmodeStr = params["pinmode"] | "OUTPUT";
+                                        String statusStr = params["status"] | "LOW";
 
-          // Resolve pin mode
-          int mode = OUTPUT;
-          if (pinmodeStr == "INPUT") mode = INPUT;
-          else if (pinmodeStr == "INPUT_PULLUP") mode = INPUT_PULLUP;
+                                        // Resolve pin mode
+                                        int mode = OUTPUT;
+                                        if (pinmodeStr == "INPUT")
+                                          mode = INPUT;
+                                        else if (pinmodeStr == "INPUT_PULLUP")
+                                          mode = INPUT_PULLUP;
 
-          // Resolve output state
-          int value = LOW;
-          if (statusStr == "HIGH") value = HIGH;
+                                        // Resolve output state
+                                        int value = LOW;
+                                        if (statusStr == "HIGH")
+                                          value = HIGH;
 
-          // Apply pin configuration
-          pinMode(gpio, mode);
+                                        // Apply pin configuration
+                                        pinMode(gpio, mode);
 
-          if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0) {
-            digitalWrite(gpio, value);
-            Serial.printf("Pin %d set to %s with mode %s\n", gpio, statusStr.c_str(), pinmodeStr.c_str());
-          } // next action inside command
-        }
-      }else if (strcmp(command, "OTA") == 0) {
-            JsonArray actions = commandObj["actions"];
+                                        if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
+                                        {
+                                          digitalWrite(gpio, value);
+                                          Serial.printf("Pin %d set to %s with mode %s\n", gpio, statusStr.c_str(), pinmodeStr.c_str());
+                                        } // next action inside command
+                                      }
+                                    }
+                                    else if (strcmp(command, "OTA") == 0)
+                                    {
+                                      JsonArray actions = commandObj["actions"];
 
+                                      for (JsonObject actionObj : actions)
+                                      {
 
-            for (JsonObject actionObj : actions) {
+                                        const char *action = actionObj["action"];
+                                        JsonObject params = actionObj["params"];
 
+                                        if (strcmp(action, "ota_update") == 0)
+                                        {
 
+                                          const char *otaUrl = params["url"];
+                                          const char *version = params["version"];
+                                          this->versionid = String(version);
+                                          if (otaUrl != nullptr)
+                                          {
+                                            performOTA(otaUrl); // Trigger OTA update
+                                          }
+                                          else
+                                          {
+                                            Serial.println("Invalid OTA URL received.");
+                                          }
+                                        }
+                                      }
+                                    } // next command
+                                  }
 
-              const char* action = actionObj["action"];
-              JsonObject params = actionObj["params"];
+                                  if (userCommandCallback)
+                                  {
+                                    userCommandCallback(msg); // Pass entire message to the user's custom logic
+                                  } });
+}
 
-              if (strcmp(action, "ota_update") == 0) {
-
-                const char* otaUrl = params["url"];
-                const char* version = params["version"];
-                 this->versionid = String(version);
-                if (otaUrl != nullptr) {
-                  performOTA(otaUrl);  // Trigger OTA update
-                } else {
-                  Serial.println("Invalid OTA URL received.");
-                }
-              }
-            }
-          } // next command 
-
-
-
-
-
-
-    } });
+void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
+{
+  userCommandCallback = cb;
 }
 
 void HyperwisorIOT::performOTA(const char *otaUrl)
