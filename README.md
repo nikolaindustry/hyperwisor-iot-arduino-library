@@ -28,14 +28,22 @@
 ```cpp
 #include <hyperwisor-iot.h>
 
+String from = "";
+
 HyperwisorIOT hyper;
 
 void setup() {
   Serial.begin(115200);
   hyper.begin();
 
-  // 👇 Register your custom command handler
-  hyper.setUserCommandHandler([](JsonObject &msg) {
+
+  hyper.setUserCommandHandler([](JsonObject& msg) {
+    if (msg.containsKey("from")) {
+      from = msg["from"].as<String>();
+      Serial.println("Message from: " + from);
+    }
+
+
     if (!msg.containsKey("payload")) return;
     JsonObject payload = msg["payload"];
     JsonArray commands = payload["commands"];
@@ -60,11 +68,29 @@ void setup() {
       }
     }
   });
+
+
+  hyper.sendTo(from, [](JsonObject& payload) {
+    JsonArray commands = payload.createNestedArray("commands");
+
+    JsonObject command = commands.createNestedObject();
+    command["command"] = "device";
+
+    JsonArray actions = command.createNestedArray("actions");
+    JsonObject action = actions.createNestedObject();
+    action["action"] = "ON";
+
+    JsonObject params = action.createNestedObject("params");
+    params["gpio"] = 5;
+    params["pinmode"] = "OUTPUT";
+    params["status"] = "HIGH";
+  });
 }
 
 void loop() {
   hyper.loop();
 }
+
 
 ```
 
