@@ -1,13 +1,13 @@
 # Hyperwisor-IOT Arduino Library
 [![Platform](https://img.shields.io/badge/hyperwisor%20IoT%20patform-white?style=for-the-badge&logo=nodedotjs)](https://www.hyperwisor.com/)
-[![Platform](https://img.shields.io/badge/platform-ESP32-blue)](https://www.espressif.com/en/products/socs/esp32)
+[![Platform](https://img.shields.io/badge/espressif%20esp32%20patform-gray?style=for-the-badge&logo=espressif)](https://www.espressif.com/en/products/socs/esp32)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![Status](https://img.shields.io/badge/status-In--Development-yellow)]()
 [![Arduino](https://img.shields.io/badge/Arduino%20IDE-%3E%3D1.8-blue)](https://www.arduino.cc/en/software)
 
-**HyperwisorIOT** is a powerful abstraction layer for ESP32-based IoT devices. It handles Wi-Fi provisioning, real-time communication, OTA updates, and GPIO management out of the box. Built on top of the [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime) protocol, it helps developers build smart, connected devices with minimal code.
+**Hyperwisor IOT** is a powerful abstraction layer for ESP32-based IoT devices. It handles Wi-Fi provisioning, real-time communication, OTA updates, and GPIO management out of the box. Built on top of the [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime) protocol, it helps developers build smart, connected devices with minimal code.
 
-**HyperwisorIOT** is a robust abstraction layer for **ESP32-based IoT devices**, enabling:
+**Hyperwisor IOT** is a robust abstraction layer for **ESP32-based IoT devices**, enabling:
 
 - Seamless Wi-Fi provisioning
 - Real-time communication
