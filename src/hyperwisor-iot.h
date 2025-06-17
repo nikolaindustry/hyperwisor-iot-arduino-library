@@ -9,6 +9,7 @@
 #include <Update.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
+#include "HyperTaskManager.h"
 
 typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
@@ -22,6 +23,10 @@ public:
   // User-defined command callback
   void setUserCommandHandler(UserCommandCallback cb);
   void sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder);
+  HyperTaskManager &getTaskManager();
+  void saveGPIOState(int pin, int state);
+  int loadGPIOState(int pin);
+  void restoreAllGPIOStates();
 
 private:
   // WiFi & Real-time Communication
@@ -29,6 +34,7 @@ private:
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;
+  HyperTaskManager taskManager;
 
   // Core functions
   void setupMessageHandler();
