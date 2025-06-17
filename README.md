@@ -1,5 +1,5 @@
 
-[![Platform](https://img.shields.io/badge/hyperwisor%20IoT%20patform-black?style=for-the-badge&logo=nodedotjs)](https://www.hyperwisor.com/)
+[![Platform](https://img.shields.io/badge/hyperwisor%20IoT%20platform-black?style=for-the-badge&logo=nodedotjs)](https://www.hyperwisor.com/)
 [![Platform](https://img.shields.io/badge/espressif%20esp32%20patform-gray?style=for-the-badge&logo=espressif)](https://www.espressif.com/en/products/socs/esp32)
 # Hyperwisor-IOT Arduino Library
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
