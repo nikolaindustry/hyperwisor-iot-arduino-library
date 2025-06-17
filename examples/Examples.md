@@ -10,20 +10,20 @@ Explore examples below to get started:
 
 | #  | Example                | Description                                                |
 |----|------------------------|------------------------------------------------------------|
-| 1  | [BasicSetup](/01_BasicSetup)             | Minimal setup and loop for starting HyperwisorIOT         |
-| 2  | [RestoreGPIOAndTasks](/02_RestoreGPIOAndTasks) | Restore GPIO states and running tasks from memory         |
-| 3  | [BlinkTask](/03_BlinkTask)               | Blink a pin with on/off time and repeat count             |
-| 4  | [FadeTask](/04_FadeTask)                 | Fade LED using PWM                                        |
-| 5  | [PulseTask](/05_PulseTask)               | Pulse a pin for fixed time                                |
-| 6  | [ToggleTask](/06_ToggleTask)             | Toggle a pin at interval                                  |
-| 7  | [DelayTask](/07_DelayTask)               | Delay turning pin on/off                                  |
-| 8  | [IntervalTask](/08_IntervalTask)         | Perform an action at intervals                            |
-| 9  | [PWMSweepTask](/09_PWMSweepTask)         | Sweep PWM values between two points                       |
-| 10 | [DebounceTask](/10_DebounceTask)         | Debounce a physical button input                          |
-| 11 | [SequenceTask](/11_SequenceTask)         | Output a sequence of HIGH/LOW on a pin                    |
-| 12 | [TimeoutRestoreTask](/12_TimeoutRestoreTask) | Set pin state and restore after timeout                   |
-| 13 | [CancelTask](/13_CancelTask)             | Cancel a task by ID                                       |
-| 14 | [UserCommandHandler](/14_UserCommandHandler) | Parse and act on incoming JSON tasks                      |
+| 1  | BasicSetup         | Minimal setup and loop for starting HyperwisorIOT         |
+| 2  | RestoreGPIOAndTasks | Restore GPIO states and running tasks from memory         |
+| 3  | BlinkTask               | Blink a pin with on/off time and repeat count             |
+| 4  | FadeTask               | Fade LED using PWM                                        |
+| 5  | PulseTask             | Pulse a pin for fixed time                                |
+| 6  | ToggleTask            | Toggle a pin at interval                                  |
+| 7  | DelayTask             | Delay turning pin on/off                                  |
+| 8  | IntervalTask         | Perform an action at intervals                            |
+| 9  | PWMSweepTask        | Sweep PWM values between two points                       |
+| 10 | DebounceTask        | Debounce a physical button input                          |
+| 11 | SequenceTask       | Output a sequence of HIGH/LOW on a pin                    |
+| 12 | TimeoutRestoreTask| Set pin state and restore after timeout                   |
+| 13 | CancelTask            | Cancel a task by ID                                       |
+| 14 | UserCommandHandler | Parse and act on incoming JSON tasks                      |
 
 ---
 
