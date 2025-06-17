@@ -105,12 +105,12 @@ void setup() {
  // Optional: Restore all previously saved GPIO states on startup
   hyper.restoreAllGPIOStates();
   // Schedule a blink task: blink pin 5, 5 times, 300ms ON, 300ms OFF
-  hyper.getTaskManager().addBlink(2, 300, 300, 5);
+  hyper.getTaskManager().addBlink(5, 300, 300, 5);
 
  
 
   // Add a blink task on pin 5 (blink 5 times with 300ms on/off)
-  hyper.getTaskManager().addBlink(2, 300, 300, 5);
+  hyper.getTaskManager().addBlink(5, 300, 300, 5);
 
   // Add a fade task on pin 18 from 0 to 255 brightness over 3 seconds
   hyper.getTaskManager().addFade(18, 0, 255, 3000);
