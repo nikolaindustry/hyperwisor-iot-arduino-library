@@ -208,18 +208,6 @@ Supports rich JSON messages from the server:
             }
           }
         ]
-      },
-      {
-        "command": "OTA",
-        "actions": [
-          {
-            "action": "ota_update",
-            "params": {
-              "url": "https://firmware-server/update.bin",
-              "version": "v2.1.0"
-            }
-          }
-        ]
       }
     ]
   }
@@ -278,15 +266,13 @@ Install all via Arduino Library Manager.
 
 ---
 
-## ✍️ Extend with Custom Logic
-
-Implement in `setUserCommandHandler()` or customize inside the library to add:
-
-* I2C or RS485 actions
-* Relay and GPIO sequencing
-* Device diagnostics and self-tests
-* Integration with sensors (DHT, BMP, etc.)
-
+# ✍️ Extend the Library
+You can add:
+### Custom command actions
+### I2C/RS485 control routines
+### Sensor integrations (DHT, BMP280, etc.)
+### Device-side condition/logic evaluation
+### Advanced scheduling or data logging
 ---
 
 ## 🔐 Persistent Storage Keys
