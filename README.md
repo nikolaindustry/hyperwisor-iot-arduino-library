@@ -46,11 +46,13 @@ void setup() {
   Serial.begin(115200);
   hyper.begin();
 
+
   hyper.setUserCommandHandler([](JsonObject& msg) {
     if (msg.containsKey("from")) {
       from = msg["from"].as<String>();
       Serial.println("Message from: " + from);
     }
+
 
     if (!msg.containsKey("payload")) return;
     JsonObject payload = msg["payload"];
@@ -60,12 +62,15 @@ void setup() {
       const char* command = commandObj["command"];
 
       if (strcmp(command, "CUSTOM_COMMAND") == 0) {
+        Serial.println("Handling CUSTOM_COMMAND in .ino");
+
         JsonArray actions = commandObj["actions"];
         for (JsonObject actionObj : actions) {
           const char* action = actionObj["action"];
           JsonObject params = actionObj["params"];
 
-          Serial.printf("Action: %s\n", action);
+          // 👉 Do custom logic here
+          Serial.printf("Custom action: %s\n", action);
           if (params.containsKey("value")) {
             Serial.printf("Value: %s\n", params["value"].as<const char*>());
           }
@@ -73,6 +78,7 @@ void setup() {
       }
     }
   });
+
 
   hyper.sendTo(from, [](JsonObject& payload) {
     JsonArray commands = payload.createNestedArray("commands");
@@ -89,11 +95,36 @@ void setup() {
     params["pinmode"] = "OUTPUT";
     params["status"] = "HIGH";
   });
+
+  // Setup a GPIO (pin 2) and save its state
+ // pinMode(2, OUTPUT);
+  //digitalWrite(2, HIGH);
+
+  // hyper.saveGPIOState(2, HIGH);
+
+ // Optional: Restore all previously saved GPIO states on startup
+  hyper.restoreAllGPIOStates();
+  // Schedule a blink task: blink pin 5, 5 times, 300ms ON, 300ms OFF
+  hyper.getTaskManager().addBlink(2, 300, 300, 5);
+
+ 
+
+  // Add a blink task on pin 5 (blink 5 times with 300ms on/off)
+  hyper.getTaskManager().addBlink(2, 300, 300, 5);
+
+  // Add a fade task on pin 18 from 0 to 255 brightness over 3 seconds
+  hyper.getTaskManager().addFade(18, 0, 255, 3000);
+
+  // Add a pulse task on pin 19 to go HIGH for 2 seconds then revert
+  hyper.getTaskManager().addPulse(19, 2000, HIGH);
+
+  Serial.println("All tasks started.");
 }
 
 void loop() {
   hyper.loop();
 }
+
 ```
 
 ---
@@ -272,4 +303,4 @@ Suggestions, bug fixes, and pull requests are welcome. Help evolve the library t
 
 ---
 
-Would you like a `.md` file download or integration into your repo as well?
+
