@@ -27,6 +27,30 @@ Explore examples below to get started:
 
 ---
 
+---
+
+## 🔧 Supported Tasks
+
+Each task is uniquely identified by `id` and accepts custom parameters:
+
+| Task              | Params                                 |
+| ----------------- | -------------------------------------- |
+| `blink`           | `pin`, `on`, `off`, `repeat`           |
+| `pulse`           | `pin`, `state`, `duration`             |
+| `fade`            | `pin`, `start`, `end`, `duration`      |
+| `toggle`          | `pin`, `interval`                      |
+| `delay`           | `pin`, `delay`, `state`                |
+| `interval`        | `pin`, `interval`, `callback`          |
+| `ramp`            | `pin`, `start`, `end`, `duration`      |
+| `pwmsweep`        | `pin`, `start`, `end`, `step`, `delay` |
+| `debounce`        | `pin`, `debounce`, `callback`          |
+| `sequence`        | `pin`, `sequence[]`, `timings[]`       |
+| `timeout_restore` | `pin`, `state`, `timeout`              |
+| `cancel`          | `id`                                   |
+| `status`          | `id`                                   |
+
+---
+
 ## 📦 Installation
 
 1. Clone this repo or download ZIP
