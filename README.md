@@ -39,13 +39,14 @@
 #include <hyperwisor-iot.h>
 
 String from = "";
-
 HyperwisorIOT hyper;
 
 void setup() {
   Serial.begin(115200);
   hyper.begin();
 
+  hyper.restoreAllGPIOStates();
+  hyper.getTaskManager().restoreAllTasks();
 
   hyper.setUserCommandHandler([](JsonObject& msg) {
     if (msg.containsKey("from")) {
@@ -53,73 +54,108 @@ void setup() {
       Serial.println("Message from: " + from);
     }
 
-
     if (!msg.containsKey("payload")) return;
     JsonObject payload = msg["payload"];
     JsonArray commands = payload["commands"];
 
     for (JsonObject commandObj : commands) {
-      const char* command = commandObj["command"];
+      if (strcmp(commandObj["command"], "TASK") != 0) continue;
 
-      if (strcmp(command, "CUSTOM_COMMAND") == 0) {
-        Serial.println("Handling CUSTOM_COMMAND in .ino");
+      JsonArray actions = commandObj["actions"];
+      for (JsonObject actionObj : actions) {
+        const char* action = actionObj["action"];
+        JsonObject params = actionObj["params"];
+        int pin = params["pin"] | -1;
+        String taskId = actionObj["id"] | "";
+        bool immunity = params["immunity"] | false;
 
-        JsonArray actions = commandObj["actions"];
-        for (JsonObject actionObj : actions) {
-          const char* action = actionObj["action"];
-          JsonObject params = actionObj["params"];
+        if (strcmp(action, "blink") == 0) {
+          hyper.getTaskManager().addBlink(pin, params["on"], params["off"], params["repeat"], taskId, immunity);
 
-          // 👉 Do custom logic here
-          Serial.printf("Custom action: %s\n", action);
-          if (params.containsKey("value")) {
-            Serial.printf("Value: %s\n", params["value"].as<const char*>());
+        } else if (strcmp(action, "fade") == 0) {
+          hyper.getTaskManager().addFade(pin, params["start"], params["end"], params["duration"], taskId, immunity);
+
+        } else if (strcmp(action, "pulse") == 0) {
+          hyper.getTaskManager().addPulse(pin, params["duration"], params["state"], taskId, immunity);
+
+        } else if (strcmp(action, "toggle") == 0) {
+          hyper.getTaskManager().addToggle(pin, params["interval"], taskId, immunity);
+
+        } else if (strcmp(action, "delay") == 0) {
+          hyper.getTaskManager().addDelay(pin, params["delay"], params["state"], taskId, immunity);
+
+        } else if (strcmp(action, "interval") == 0) {
+          hyper.getTaskManager().addInterval(pin, params["interval"], [](int pin) {
+            Serial.printf("Interval callback on pin %d\n", pin);
+          }, taskId, immunity);
+
+        } else if (strcmp(action, "ramp") == 0) {
+          hyper.getTaskManager().addRamp(pin, params["start"], params["end"], params["duration"], taskId, immunity);
+
+        } else if (strcmp(action, "pwmsweep") == 0) {
+          hyper.getTaskManager().addPWMSweep(pin, params["start"], params["end"], params["step"], params["delay"], taskId, immunity);
+
+        } else if (strcmp(action, "debounce") == 0) {
+          hyper.getTaskManager().addDebounce(pin, params["debounce"], [](int pin, int state) {
+            Serial.printf("Debounced pin %d state %d\n", pin, state);
+          }, taskId, immunity);
+
+        } else if (strcmp(action, "sequence") == 0) {
+          JsonArray seq = params["sequence"];
+          JsonArray times = params["timings"];
+          int len = seq.size();
+          int* sequenceArray = new int[len];
+          int* timingArray = new int[len];
+          for (int i = 0; i < len; i++) {
+            sequenceArray[i] = seq[i].as<int>();
+            timingArray[i] = times[i].as<int>();
           }
+          hyper.getTaskManager().addSequence(pin, sequenceArray, timingArray, len, taskId, immunity);
+          delete[] sequenceArray;
+          delete[] timingArray;
+
+        } else if (strcmp(action, "timeout_restore") == 0) {
+          hyper.getTaskManager().addTimeoutRestore(pin, params["state"], params["timeout"], taskId, immunity);
+
+        } else if (strcmp(action, "cancel") == 0) {
+          bool result = hyper.getTaskManager().cancelTaskById(taskId);
+          Serial.printf("Cancel task %s: %s\n", taskId.c_str(), result ? "Success" : "Failed");
+
+          hyper.sendTo(from, [taskId, result](JsonObject& payload) {
+            JsonObject action = payload.createNestedArray("commands").createNestedObject();
+            action["command"] = "task";
+            JsonObject cancel = action.createNestedArray("actions").createNestedObject();
+            cancel["action"] = "cancel_response";
+            JsonObject p = cancel.createNestedObject("params");
+            p["id"] = taskId;
+            p["success"] = result;
+          });
+
+        } else if (strcmp(action, "status") == 0) {
+          String status = hyper.getTaskManager().getTaskStatusById(taskId);
+          Serial.printf("Status of task %s: %s\n", taskId.c_str(), status.c_str());
+
+          hyper.sendTo(from, [taskId, status](JsonObject& payload) {
+            JsonObject action = payload.createNestedArray("commands").createNestedObject();
+            action["command"] = "task";
+            JsonObject res = action.createNestedArray("actions").createNestedObject();
+            res["action"] = "status_response";
+            JsonObject p = res.createNestedObject("params");
+            p["id"] = taskId;
+            p["status"] = status;
+          });
         }
       }
     }
   });
 
-
-  hyper.sendTo(from, [](JsonObject& payload) {
-    JsonArray commands = payload.createNestedArray("commands");
-
-    JsonObject command = commands.createNestedObject();
-    command["command"] = "device";
-
-    JsonArray actions = command.createNestedArray("actions");
-    JsonObject action = actions.createNestedObject();
-    action["action"] = "ON";
-
-    JsonObject params = action.createNestedObject("params");
-    params["gpio"] = 5;
-    params["pinmode"] = "OUTPUT";
-    params["status"] = "HIGH";
-  });
-
-  // Setup a GPIO (pin 2) and save its state
- // pinMode(2, OUTPUT);
-  //digitalWrite(2, HIGH);
-
-  // hyper.saveGPIOState(2, HIGH);
-
- // Optional: Restore all previously saved GPIO states on startup
-  hyper.restoreAllGPIOStates();
-
-  // Add a blink task on pin 5 (blink 5 times with 300ms on/off)
-  hyper.getTaskManager().addBlink(5, 300, 300, 5);
-
-  // Add a fade task on pin 18 from 0 to 255 brightness over 3 seconds
-  hyper.getTaskManager().addFade(18, 0, 255, 3000);
-
-  // Add a pulse task on pin 19 to go HIGH for 2 seconds then revert
-  hyper.getTaskManager().addPulse(19, 2000, HIGH);
-
-  Serial.println("All tasks started.");
+  Serial.println("Ready to receive tasks.");
 }
 
 void loop() {
   hyper.loop();
 }
+
 
 ```
 
