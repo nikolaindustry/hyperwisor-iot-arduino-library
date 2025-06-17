@@ -1,188 +1,63 @@
-#ifndef HYPER_TASK_MANAGER_H
-#define HYPER_TASK_MANAGER_H
+#ifndef HYPERWISOR_IOT_H
+#define HYPERWISOR_IOT_H
 
 #include <Arduino.h>
-#include <ArduinoJson.h>
+#include <WiFi.h>
+#include <nikolaindustry-realtime.h>
+#include <WebServer.h>
 #include <Preferences.h>
+#include <Update.h>
+#include <DNSServer.h>
+#include <HTTPClient.h>
+#include "HyperTaskManager.h"
 
-#define MAX_TASKS 20
+typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
-// ------------------------ STRUCTS ------------------------
-
-struct BlinkTask
-{
-  int pin, onDuration, offDuration, repeat, count;
-  unsigned long lastToggleTime;
-  bool state, active;
-  String id;
-};
-
-struct FadeTask
-{
-  int pin, startBrightness, endBrightness, duration;
-  unsigned long startTime;
-  bool active;
-  String id;
-};
-
-struct PulseTask
-{
-  int pin, duration, initialState;
-  unsigned long startTime;
-  bool active;
-  String id;
-};
-
-struct ToggleTask
-{
-  int pin;
-  int interval;
-  unsigned long lastToggleTime;
-  bool state;
-  bool active;
-  String id;
-};
-
-struct DelayTask
-{
-  int pin;
-  int delayTime;
-  int targetState;
-  unsigned long startTime;
-  bool active;
-  String id;
-};
-
-struct RampTask
-{
-  int pin;
-  int startVal, endVal;
-  int duration;
-  unsigned long startTime;
-  bool active;
-  String id;
-};
-
-struct PWMSweepTask
-{
-  int pin;
-  int minPWM, maxPWM;
-  int step;
-  bool increasing;
-  unsigned long lastStepTime;
-  int interval;
-  int value;
-  bool active;
-  String id;
-};
-
-struct SequenceTask
-{
-  int pin;
-  int *sequence;
-  int *durations;
-  int length;
-  int index;
-  unsigned long lastChange;
-  bool active;
-  String id;
-};
-
-struct TimeoutRestoreTask
-{
-  int pin;
-  int tempState;
-  int originalState;
-  unsigned long startTime;
-  int duration;
-  bool active;
-  String id;
-};
-
-struct IntervalTask
-{
-  int pin;
-  int interval;
-  std::function<void(int)> callback;
-  unsigned long lastCall;
-  bool active;
-  String id;
-
-  IntervalTask(int p, int i, std::function<void(int)> cb, unsigned long last, bool a, const String &id)
-      : pin(p), interval(i), callback(cb), lastCall(last), active(a), id(id) {}
-
-  IntervalTask() = default;
-};
-
-struct DebounceTask
-{
-  int pin;
-  int stableState;
-  unsigned long lastChange;
-  int debounceDelay;
-  std::function<void(int, int)> onChange;
-  bool active;
-  String id;
-
-  DebounceTask(int p, int state, unsigned long change, int delay, std::function<void(int, int)> cb, bool a, const String &id)
-      : pin(p), stableState(state), lastChange(change), debounceDelay(delay), onChange(cb), active(a), id(id) {}
-
-  DebounceTask() = default;
-};
-
-// ------------------------ CLASS ------------------------
-
-class HyperTaskManager
+class HyperwisorIOT
 {
 public:
+  HyperwisorIOT();
   void begin();
   void loop();
 
-  // Task adders with optional taskId
-  void addBlink(int pin, int on, int off, int repeat, const String &id, bool immunity);
-  void addFade(int pin, int start, int end, int duration, const String &id, bool immunity);
-  void addPulse(int pin, int duration, int state, const String &id, bool immunity);
-  void addToggle(int pin, int interval, const String &id, bool immunity);
-  void addDelay(int pin, int delayTime, int state, const String &id, bool immunity);
-  void addInterval(int pin, int interval, std::function<void(int)> callback, const String &id, bool immunity);
-  void addRamp(int pin, int start, int end, int duration, const String &id, bool immunity);
-  void addPWMSweep(int pin, int start, int end, int step, int delayMs, const String &id, bool immunity);
-  void addDebounce(int pin, int debounceTime, std::function<void(int, int)> callback, const String &id, bool immunity);
-  void addSequence(int pin, int *sequence, int *timings, int length, const String &id, bool immunity);
-  void addTimeoutRestore(int pin, int state, int timeout, const String &id, bool immunity);
-  void saveTaskDefinition(const String &id, const String &type, JsonObject params, bool immunity);
-  void restoreAllTasks();
-  void clearAllSavedTasks();
-
-  // Task management
-  bool cancelTaskById(const String &taskId);
-  String getTaskStatusById(const String &taskId);
+  // User-defined command callback
+  void setUserCommandHandler(UserCommandCallback cb);
+  void sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder);
+  HyperTaskManager &getTaskManager();
+  void saveGPIOState(int pin, int state);
+  int loadGPIOState(int pin);
+  void restoreAllGPIOStates();
 
 private:
-  BlinkTask blinkTasks[MAX_TASKS];
-  FadeTask fadeTasks[MAX_TASKS];
-  PulseTask pulseTasks[MAX_TASKS];
-  ToggleTask toggleTasks[MAX_TASKS];
-  DelayTask delayTasks[MAX_TASKS];
-  IntervalTask intervalTasks[MAX_TASKS];
-  RampTask rampTasks[MAX_TASKS];
-  PWMSweepTask pwmSweepTasks[MAX_TASKS];
-  DebounceTask debounceTasks[MAX_TASKS];
-  SequenceTask sequenceTasks[MAX_TASKS];
-  TimeoutRestoreTask timeoutTasks[MAX_TASKS];
-  Preferences taskpreferences;
-  // Internal loop updates
-  void updateBlinkTasks();
-  void updateFadeTasks();
-  void updatePulseTasks();
-  void updateToggleTasks();
-  void updateDelayTasks();
-  void updateIntervalTasks();
-  void updateRampTasks();
-  void updatePWMSweepTasks();
-  void updateDebounceTasks();
-  void updateSequenceTasks();
-  void updateTimeoutRestoreTasks();
+  // WiFi & Real-time Communication
+  nikolaindustryrealtime realtime;
+  WebServer server;
+  DNSServer dnsServer;
+  HTTPClient http;
+  HyperTaskManager taskManager;
+
+  // Core functions
+  void setupMessageHandler();
+  void performOTA(const char *otaUrl);
+  void getcredentials();
+  void startAPMode();
+  void handle_provision();
+  void connectToWiFi();
+  String getSuccessHtml();
+  String getErrorHtml(String errorMessage);
+  UserCommandCallback userCommandCallback = nullptr;
+
+  // Credentials and config
+  String ssid, password, userid, deviceid, productid, email, loaclip, macid, newtarget, versionid;
+  const char *apSSID = "NIKOLAINDUSTRY_Setup";
+  const char *apPassword = "0123456789";
+  String fversion = "0.0.1";
+
+  // Retry Logic
+  unsigned long lastReconnectAttempt = 0;
+  const unsigned long reconnectInterval = 10000;
+  int retryCount = 0;
+  const int maxRetries = 6;
 };
 
 #endif
