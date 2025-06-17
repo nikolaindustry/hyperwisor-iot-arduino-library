@@ -254,7 +254,7 @@ hyper.sendTo(targetId, [](JsonObject& payload) {
 ---
 
 ## 📚 Dependencies
-
+* [`hyperwisor.com`](https://www.hyperwisor.com/)
 * [`WiFi.h`](https://www.arduino.cc/en/Reference/WiFi)
 * [`ArduinoJson`](https://arduinojson.org/)
 * [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime)
