@@ -1,6 +1,7 @@
 #include "hyperwisor-iot.h"
 
 Preferences preferences;
+Preferences gpioPreferences;
 bool provision_request = false;
 
 HyperwisorIOT::HyperwisorIOT()
@@ -19,11 +20,13 @@ void HyperwisorIOT::begin()
   {
     startAPMode();
   }
+  taskManager.begin();
 }
 
 void HyperwisorIOT::loop()
 {
   realtime.loop();
+  taskManager.loop();
   if (WiFi.getMode() == WIFI_AP)
   {
     dnsServer.processNextRequest();
@@ -293,6 +296,42 @@ void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject
   payloadBuilder(payload); // Let user fill the payload
 
   realtime.sendJson(root); // ✅ Pass JsonObject directly
+}
+
+HyperTaskManager &HyperwisorIOT::getTaskManager()
+{
+  return taskManager;
+}
+
+void HyperwisorIOT::saveGPIOState(int pin, int state)
+{
+  gpioPreferences.begin("gpio-states", false);
+  gpioPreferences.putInt(("pin_" + String(pin)).c_str(), state);
+  gpioPreferences.end();
+}
+
+int HyperwisorIOT::loadGPIOState(int pin)
+{
+  gpioPreferences.begin("gpio-states", false);
+  return gpioPreferences.getInt(("pin_" + String(pin)).c_str(), LOW);
+  gpioPreferences.end();
+}
+
+void HyperwisorIOT::restoreAllGPIOStates()
+{
+  gpioPreferences.begin("gpio-states", false);
+  for (int pin = 0; pin < 40; pin++)
+  {
+    String key = "pin_" + String(pin);
+    if (gpioPreferences.isKey(key.c_str()))
+    {
+      int state = gpioPreferences.getInt(key.c_str(), LOW);
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, state);
+      Serial.printf("Restored pin %d to state %d\n", pin, state);
+    }
+  }
+  gpioPreferences.end();
 }
 
 void HyperwisorIOT::performOTA(const char *otaUrl)
