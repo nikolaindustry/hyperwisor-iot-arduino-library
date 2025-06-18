@@ -478,6 +478,10 @@ void HyperTaskManager::updateTimeoutRestoreTasks()
 
 bool HyperTaskManager::cancelTaskById(const String &taskId)
 {
+  // I2C Task
+  if (cancelI2CTaskById(taskId))
+    return true;
+
   for (int i = 0; i < MAX_TASKS; i++)
   {
     if (blinkTasks[i].active && blinkTasks[i].id == taskId)
@@ -539,12 +543,17 @@ bool HyperTaskManager::cancelTaskById(const String &taskId)
       return true;
     }
   }
-
+  // Add additional task type cleanup here if needed
+  // For now, we assume only I2C tasks are cancelable
   return false;
 }
 
 String HyperTaskManager::getTaskStatusById(const String &taskId)
 {
+  // I2C Task
+  auto it = i2cTaskStatuses.find(taskId);
+  if (it != i2cTaskStatuses.end())
+    return it->second;
   for (int i = 0; i < MAX_TASKS; i++)
   {
     if (blinkTasks[i].id == taskId)
@@ -599,7 +608,7 @@ void HyperTaskManager::restoreAllTasks()
   for (int i = 0; i < count; i++)
   {
     String key = "task_" + String(i);
-    if (taskpreferences.isKey(key.c_str()))
+    if (!taskpreferences.isKey(key.c_str()))
       continue;
 
     String jsonStr = taskpreferences.getString(key.c_str());
@@ -614,6 +623,8 @@ void HyperTaskManager::restoreAllTasks()
     JsonObject params = doc["params"];
 
     if (!immunity)
+      continue;
+    if (!params.containsKey("pin"))
       continue;
 
     int pin = params["pin"] | -1;
@@ -683,4 +694,204 @@ void HyperTaskManager::clearAllSavedTasks()
   taskpreferences.begin("tasks", false);
   taskpreferences.clear();
   taskpreferences.end();
+}
+
+void HyperTaskManager::addI2CTask(
+    uint8_t sda,
+    uint8_t scl,
+    uint8_t deviceAddress,
+    const std::vector<uint8_t> &writeData,
+    const String &taskId,
+    bool immunity)
+{
+  I2CTask task = {sda, scl, deviceAddress, writeData, 0, {}, false, taskId, immunity};
+  i2cTaskStatuses[taskId] = "pending";
+  i2cTasks.push_back(task);
+}
+
+void HyperTaskManager::updateI2CTasks()
+{
+  for (auto it = i2cTasks.begin(); it != i2cTasks.end();)
+  {
+    I2CTask &task = *it;
+
+    TwoWire *wire = getWireInstance(task.sda, task.scl);
+    if (!wire)
+    {
+      i2cTaskStatuses[task.taskId] = "error: no wire available";
+      it = i2cTasks.erase(it);
+      continue;
+    }
+
+    if (task.isRead)
+    {
+      wire->beginTransmission(task.deviceAddress);
+      wire->endTransmission();
+
+      std::vector<uint8_t> result;
+      wire->requestFrom(task.deviceAddress, (uint8_t)task.readLen);
+      while (wire->available())
+      {
+        result.push_back(wire->read());
+      }
+
+      i2cTaskResults[task.taskId] = result;
+      i2cTaskStatuses[task.taskId] = "success";
+    }
+    else
+    {
+      wire->beginTransmission(task.deviceAddress);
+      for (uint8_t b : task.writeData)
+      {
+        wire->write(b);
+      }
+      byte status = wire->endTransmission();
+      i2cTaskStatuses[task.taskId] = (status == 0) ? "success" : "failed";
+    }
+
+    it = i2cTasks.erase(it); // Remove finished task
+  }
+}
+
+std::vector<uint8_t> HyperTaskManager::getI2CReadResult(const String &taskId)
+{
+  if (i2cTaskResults.find(taskId) != i2cTaskResults.end())
+  {
+    return i2cTaskResults[taskId];
+  }
+  return {};
+}
+
+bool HyperTaskManager::cancelI2CTaskById(const String &taskId)
+{
+  for (auto it = i2cTasks.begin(); it != i2cTasks.end(); ++it)
+  {
+    if (it->taskId == taskId)
+    {
+      i2cTasks.erase(it);
+      i2cTaskStatuses[taskId] = "cancelled";
+      return true;
+    }
+  }
+  return false;
+}
+
+String HyperTaskManager::getI2CTaskStatusById(const String &taskId)
+{
+  if (i2cTaskStatuses.find(taskId) != i2cTaskStatuses.end())
+  {
+    return i2cTaskStatuses[taskId];
+  }
+  return "not_found";
+}
+
+void HyperTaskManager::clearWireInstances()
+{
+  for (auto &pair : wireInstances)
+  {
+    delete pair.second;
+  }
+  wireInstances.clear();
+}
+
+TwoWire *HyperTaskManager::getWireInstance(uint8_t sda, uint8_t scl)
+{
+  String key = String(sda) + "-" + String(scl);
+
+  if (wireInstances.find(key) == wireInstances.end())
+  {
+    int busIndex = wireInstances.size(); // Use 0 or 1 for ESP32
+    if (busIndex >= 2)
+      return nullptr; // ESP32 supports only 2 I2C buses
+
+    TwoWire *wire = (busIndex == 0) ? new TwoWire(0) : new TwoWire(1);
+    wire->begin(sda, scl);
+    wireInstances[key] = wire;
+  }
+
+  return wireInstances[key];
+}
+
+bool HyperTaskManager::removeTaskFromPersistence(const String &taskId)
+{
+  taskpreferences.begin("tasks", false); // RW mode
+
+  int count = taskpreferences.getUInt("taskCount", 0);
+  bool found = false;
+
+  // Create a temporary array to hold updated entries
+  std::vector<String> updatedEntries;
+
+  for (int i = 0; i < count; i++)
+  {
+    String key = "task_" + String(i);
+    if (!taskpreferences.isKey(key.c_str()))
+      continue;
+
+    String jsonStr = taskpreferences.getString(key.c_str());
+    StaticJsonDocument<512> doc;
+    DeserializationError err = deserializeJson(doc, jsonStr);
+    if (err)
+    {
+      updatedEntries.push_back(jsonStr); // Preserve corrupt task
+      continue;
+    }
+
+    String id = doc["id"];
+    if (id == taskId)
+    {
+      found = true; // Task to remove
+      continue;
+    }
+
+    updatedEntries.push_back(jsonStr); // Keep this task
+  }
+
+  // Now clear all tasks and rewrite only the remaining ones
+  taskpreferences.clear();
+
+  taskpreferences.putUInt("taskCount", updatedEntries.size());
+  for (int i = 0; i < updatedEntries.size(); i++)
+  {
+    String key = "task_" + String(i);
+    taskpreferences.putString(key.c_str(), updatedEntries[i]);
+  }
+
+  taskpreferences.end();
+  return found;
+}
+
+std::vector<String> HyperTaskManager::listAllPersistentTasks()
+{
+  std::vector<String> taskIds;
+
+  taskpreferences.begin("tasks", true); // Open preferences in read-only mode
+  int count = taskpreferences.getUInt("taskCount", 0);
+
+  for (int i = 0; i < count; i++)
+  {
+    String key = "task_" + String(i);
+    if (!taskpreferences.isKey(key.c_str()))
+      continue;
+
+    String jsonStr = taskpreferences.getString(key.c_str());
+    StaticJsonDocument<512> doc;
+    DeserializationError err = deserializeJson(doc, jsonStr);
+    if (err)
+      continue;
+
+    String id = doc["id"];
+    taskIds.push_back(id);
+  }
+
+  taskpreferences.end();
+
+  // 🔧 Debug output
+  Serial.println("[TASK-PERSIST] Listing all saved task IDs:");
+  for (const String &id : taskIds)
+  {
+    Serial.println(" - " + id);
+  }
+
+  return taskIds;
 }
