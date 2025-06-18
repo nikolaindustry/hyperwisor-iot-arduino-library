@@ -4,7 +4,9 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
-
+#include <vector>
+#include <map> // <-- This is essential
+#include <Wire.h>
 #define MAX_TASKS 20
 
 // ------------------------ STRUCTS ------------------------
@@ -130,6 +132,19 @@ struct DebounceTask
   DebounceTask() = default;
 };
 
+struct I2CTask
+{
+  uint8_t sda;
+  uint8_t scl;
+  uint8_t deviceAddress;
+  std::vector<uint8_t> writeData;
+  size_t readLen;
+  std::vector<uint8_t> readResult;
+  bool isRead;
+  String taskId;
+  bool immunity;
+};
+
 // ------------------------ CLASS ------------------------
 
 class HyperTaskManager
@@ -154,9 +169,18 @@ public:
   void restoreAllTasks();
   void clearAllSavedTasks();
 
-  // Task management
+  std::vector<uint8_t> getI2CReadResult(const String &taskId);
+  bool cancelI2CTaskById(const String &taskId);
+  String getI2CTaskStatusById(const String &taskId);
+  void addI2CTask(uint8_t sda, uint8_t scl, uint8_t address, const std::vector<uint8_t> &writeData, const String &taskId = "", bool immunity = false);
+  void addI2CReadTask(uint8_t sda, uint8_t scl, uint8_t address, size_t readLen, const String &taskId = "", bool immunity = false);
   bool cancelTaskById(const String &taskId);
   String getTaskStatusById(const String &taskId);
+  TwoWire *getWireInstance(uint8_t sda, uint8_t scl);
+  void clearWireInstances();
+  bool removeTaskFromPersistence(const String &taskId);
+  std::vector<String> listAllPersistentTasks();
+  String getPersistentTaskJsonById(const String &taskId);
 
 private:
   BlinkTask blinkTasks[MAX_TASKS];
@@ -171,6 +195,7 @@ private:
   SequenceTask sequenceTasks[MAX_TASKS];
   TimeoutRestoreTask timeoutTasks[MAX_TASKS];
   Preferences taskpreferences;
+
   // Internal loop updates
   void updateBlinkTasks();
   void updateFadeTasks();
@@ -183,6 +208,12 @@ private:
   void updateDebounceTasks();
   void updateSequenceTasks();
   void updateTimeoutRestoreTasks();
+  std::vector<I2CTask> i2cTasks;
+  std::map<String, std::vector<uint8_t>> i2cTaskResults;
+  std::map<String, String> i2cTaskStatuses;
+  std::map<String, TwoWire *> wireInstances;
+
+  void updateI2CTasks();
 };
 
 #endif
