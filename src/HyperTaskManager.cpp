@@ -895,3 +895,100 @@ std::vector<String> HyperTaskManager::listAllPersistentTasks()
 
   return taskIds;
 }
+
+void HyperTaskManager::addUARTTask(int uartNum, unsigned long baudRate, const std::vector<uint8_t> &txData, int rxLen, bool isRead, const String &taskId, bool immunity)
+{
+  UARTTask task = {uartNum, baudRate, txData, rxLen, isRead, 1000, millis(), true, taskId, immunity};
+  uartTasks.push_back(task);
+  uartTaskStatuses[taskId] = "pending";
+
+  if (immunity)
+  {
+    StaticJsonDocument<512> doc;
+    JsonObject params = doc.to<JsonObject>();
+    params["uart"] = uartNum;
+    params["baud"] = baudRate;
+    params["rxLen"] = rxLen;
+    params["isRead"] = isRead;
+    JsonArray data = params.createNestedArray("txData");
+    for (uint8_t b : txData)
+      data.add(b);
+    saveTaskDefinition(taskId, "uart", params, immunity);
+  }
+}
+
+void HyperTaskManager::addUARTTask(int uartNum, unsigned long baudRate, const char *text, int rxLen, bool isRead, const String &taskId, bool immunity)
+{
+  std::vector<uint8_t> txData;
+  while (*text)
+    txData.push_back(*text++);
+  addUARTTask(uartNum, baudRate, txData, rxLen, isRead, taskId, immunity);
+}
+
+void HyperTaskManager::updateUARTTasks()
+{
+  for (auto it = uartTasks.begin(); it != uartTasks.end();)
+  {
+    UARTTask &task = *it;
+    HardwareSerial *serial = (task.uartNum == 0) ? &Serial : (task.uartNum == 1) ? &Serial1
+                                                                                 : &Serial2;
+
+    if (!serial)
+    {
+      uartTaskStatuses[task.taskId] = "error: no serial port";
+      it = uartTasks.erase(it);
+      continue;
+    }
+
+    serial->begin(task.baudRate);
+    for (uint8_t b : task.txData)
+      serial->write(b);
+
+    if (task.isRead)
+    {
+      unsigned long start = millis();
+      std::vector<uint8_t> result;
+      while ((millis() - start) < task.timeout && result.size() < task.rxLen)
+      {
+        if (serial->available())
+          result.push_back(serial->read());
+      }
+      uartTaskResults[task.taskId] = result;
+    }
+
+    uartTaskStatuses[task.taskId] = "success";
+    it = uartTasks.erase(it);
+  }
+}
+
+std::vector<uint8_t> HyperTaskManager::getUARTReadResult(const String &taskId)
+{
+  if (uartTaskResults.find(taskId) != uartTaskResults.end())
+  {
+    return uartTaskResults[taskId];
+  }
+  return {};
+}
+
+bool HyperTaskManager::cancelUARTTaskById(const String &taskId)
+{
+  for (auto it = uartTasks.begin(); it != uartTasks.end(); ++it)
+  {
+    if (it->taskId == taskId)
+    {
+      uartTasks.erase(it);
+      uartTaskStatuses[taskId] = "cancelled";
+      return true;
+    }
+  }
+  return false;
+}
+
+String HyperTaskManager::getUARTTaskStatusById(const String &taskId)
+{
+  if (uartTaskStatuses.find(taskId) != uartTaskStatuses.end())
+  {
+    return uartTaskStatuses[taskId];
+  }
+  return "not_found";
+}
