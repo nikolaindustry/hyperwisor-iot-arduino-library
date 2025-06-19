@@ -145,6 +145,20 @@ struct I2CTask
   bool immunity;
 };
 
+struct UARTTask
+{
+  int uartNum;
+  unsigned long baudRate;
+  std::vector<uint8_t> txData;
+  int rxLen;
+  bool isRead;
+  unsigned long timeout;
+  unsigned long startTime;
+  bool active;
+  String taskId;
+  bool immunity;
+};
+
 // ------------------------ CLASS ------------------------
 
 class HyperTaskManager
@@ -182,6 +196,13 @@ public:
   std::vector<String> listAllPersistentTasks();
   String getPersistentTaskJsonById(const String &taskId);
 
+  void addUARTTask(int uartNum, unsigned long baudRate, const std::vector<uint8_t> &txData, int rxLen, bool isRead, const String &taskId, bool immunity);
+  void addUARTTask(int uartNum, unsigned long baudRate, const char *text, int rxLen, bool isRead, const String &taskId, bool immunity);
+  void updateUARTTasks();
+  String getUARTTaskStatusById(const String &taskId);
+  std::vector<uint8_t> getUARTReadResult(const String &taskId);
+  bool cancelUARTTaskById(const String &taskId);
+
 private:
   BlinkTask blinkTasks[MAX_TASKS];
   FadeTask fadeTasks[MAX_TASKS];
@@ -212,8 +233,11 @@ private:
   std::map<String, std::vector<uint8_t>> i2cTaskResults;
   std::map<String, String> i2cTaskStatuses;
   std::map<String, TwoWire *> wireInstances;
-
   void updateI2CTasks();
+
+  std::vector<UARTTask> uartTasks;
+  std::map<String, std::vector<uint8_t>> uartTaskResults;
+  std::map<String, String> uartTaskStatuses;
 };
 
 #endif
