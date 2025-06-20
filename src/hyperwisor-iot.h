@@ -27,6 +27,7 @@ public:
   void saveGPIOState(int pin, int state);
   int loadGPIOState(int pin);
   void restoreAllGPIOStates();
+  String getDeviceId();
 
 private:
   // WiFi & Real-time Communication
@@ -43,6 +44,7 @@ private:
   void startAPMode();
   void handle_provision();
   void connectToWiFi();
+
   String getSuccessHtml();
   String getErrorHtml(String errorMessage);
   UserCommandCallback userCommandCallback = nullptr;
