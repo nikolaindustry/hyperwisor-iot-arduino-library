@@ -285,6 +285,14 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
   userCommandCallback = cb;
 }
 
+String HyperwisorIOT::getDeviceId() {
+
+  preferences.begin("wifi-creds", true);
+  String id = preferences.getString("deviceid", "unknown");
+  preferences.end();
+  return id;
+}
+
 void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder)
 {
   DynamicJsonDocument doc(512); // Adjust size as needed
