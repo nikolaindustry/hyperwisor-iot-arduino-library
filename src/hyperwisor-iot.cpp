@@ -23,15 +23,48 @@ void HyperwisorIOT::begin()
   taskManager.begin();
 }
 
+// void HyperwisorIOT::loop()
+// {
+//   realtime.loop();
+//   taskManager.loop();
+//   if (WiFi.getMode() == WIFI_AP)
+//   {
+//     dnsServer.processNextRequest();
+//     server.handleClient();
+//   }
+// }
+
+unsigned long apStartTime = 0;
+bool apStarted = false;
+
 void HyperwisorIOT::loop()
 {
   realtime.loop();
   taskManager.loop();
+
   if (WiFi.getMode() == WIFI_AP)
   {
+    if (!apStarted)
+    {
+      apStartTime = millis();
+      apStarted = true;
+    }
+
     dnsServer.processNextRequest();
     server.handleClient();
+
+    if (millis() - apStartTime > 240000)
+    { // 4 min
+      Serial.println("Stuck in AP mode too long. Rebooting...");
+      ESP.restart();
+    }
   }
+  else
+  {
+    apStarted = false;
+  }
+
+  // Reconnect attempt (same as above)
 }
 
 void HyperwisorIOT::startAPMode()
@@ -285,7 +318,8 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
   userCommandCallback = cb;
 }
 
-String HyperwisorIOT::getDeviceId() {
+String HyperwisorIOT::getDeviceId()
+{
 
   preferences.begin("wifi-creds", true);
   String id = preferences.getString("deviceid", "unknown");
@@ -304,6 +338,22 @@ void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject
   payloadBuilder(payload); // Let user fill the payload
 
   realtime.sendJson(root); // ✅ Pass JsonObject directly
+}
+
+void HyperwisorIOT::sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList)
+{
+  String deviceId = getDeviceId();
+
+  sendTo(targetId, [&](JsonObject &payload)
+         {
+    payload["type"] = "sensorDataResponse";
+    payload["configId"] = configId;
+    payload["deviceId"] = deviceId;
+
+    JsonObject data = payload.createNestedObject("data");
+    for (auto& kv : dataList) {
+      data[kv.first] = kv.second;
+    } });
 }
 
 HyperTaskManager &HyperwisorIOT::getTaskManager()
