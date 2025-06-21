@@ -28,6 +28,7 @@ public:
   int loadGPIOState(int pin);
   void restoreAllGPIOStates();
   String getDeviceId();
+  void sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
 
 private:
   // WiFi & Real-time Communication
