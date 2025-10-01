@@ -304,6 +304,14 @@ void HyperwisorIOT::setupMessageHandler()
                                           }
                                         }
                                       }
+                                    }
+                                    else if (strcmp(command, "DEVICE_STATUS") == 0)
+                                    {
+                                      // Respond with device status (online)
+                                      realtime.sendTo(this->newtarget, [](JsonObject &payload) {
+                                        payload["status"] = "online";
+                                        payload["response"] = "device_status";
+                                      });
                                     } // next command
                                   }
 
@@ -354,6 +362,672 @@ void HyperwisorIOT::sendSensorData(const String &targetId, const String &configI
     for (auto& kv : dataList) {
       data[kv.first] = kv.second;
     } });
+}
+
+void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, const String &value) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    payload["value"] = value;
+  });
+}
+
+void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, float value) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    payload["value"] = value;
+  });
+}
+
+void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
+  realtime.sendTo(targetId, [](JsonObject &payload) {
+    payload["status"] = "online";
+    payload["response"] = "device_status";
+  });
+}
+
+void HyperwisorIOT::setApiKeys(const String &apiKey, const String &secretKey) {
+  this->apiKey = apiKey;
+  this->secretKey = secretKey;
+}
+
+void HyperwisorIOT::insertDatainDatabase(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["product_id"] = productId;
+  root["device_id"] = deviceId;
+  root["table_name"] = tableName;
+  
+  JsonObject dataPayload = root.createNestedObject("data_payload");
+  dataBuilder(dataPayload); // Let user fill the data payload
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Database data sent successfully. Response: " + response);
+  } else {
+    Serial.println("Error sending database data. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::insertDatainDatabaseWithResponse(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(1024);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["product_id"] = productId;
+  root["device_id"] = deviceId;
+  root["table_name"] = tableName;
+  
+  JsonObject dataPayload = root.createNestedObject("data_payload");
+  dataBuilder(dataPayload); // Let user fill the data payload
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(1024);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
+}
+
+void HyperwisorIOT::getDatabaseData(const String &productId, const String &tableName, int limit) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Build the URL with query parameters
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data";
+  url += "?product_id=" + productId;
+  url += "&table_name=" + tableName;
+  url += "&limit=" + String(limit);
+
+  // Send HTTP GET request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, url);
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Database data retrieved successfully. Response: " + response);
+  } else {
+    Serial.println("Error retrieving database data. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::getDatabaseDataWithResponse(const String &productId, const String &tableName, int limit) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(2048);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Build the URL with query parameters
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data";
+  url += "?product_id=" + productId;
+  url += "&table_name=" + tableName;
+  url += "&limit=" + String(limit);
+
+  // Send HTTP GET request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, url);
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(2048);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
+}
+
+void HyperwisorIOT::updateDatabaseData(const String &dataId, std::function<void(JsonObject &)> dataBuilder) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  JsonObject dataPayload = root.createNestedObject("data_payload");
+  dataBuilder(dataPayload); // Let user fill the data payload
+
+  // Send HTTP PUT request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data/" + dataId;
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.PUT(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Database data updated successfully. Response: " + response);
+  } else {
+    Serial.println("Error updating database data. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::updateDatabaseDataWithResponse(const String &dataId, std::function<void(JsonObject &)> dataBuilder) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(2048);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  JsonObject dataPayload = root.createNestedObject("data_payload");
+  dataBuilder(dataPayload); // Let user fill the data payload
+
+  // Send HTTP PUT request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data/" + dataId;
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.PUT(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(2048);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
+}
+
+void HyperwisorIOT::deleteDatabaseData(const String &dataId) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Send HTTP DELETE request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data/" + dataId;
+  http.begin(client, url);
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  int httpResponseCode = http.sendRequest("DELETE", "");
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Database data deleted successfully. Response: " + response);
+  } else {
+    Serial.println("Error deleting database data. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::deleteDatabaseDataWithResponse(const String &dataId) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(1024);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Send HTTP DELETE request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  String url = "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/database/runtime-data/" + dataId;
+  http.begin(client, url);
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  int httpResponseCode = http.sendRequest("DELETE", "");
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(1024);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
+}
+
+void HyperwisorIOT::onboardDevice(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["product_id"] = productId;
+  root["user_id"] = userId;
+  root["device_name"] = deviceName;
+  root["device_identifier"] = deviceIdentifier;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/onboarding/device");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Device onboarded successfully. Response: " + response);
+  } else {
+    Serial.println("Error onboarding device. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::onboardDeviceWithResponse(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(2048);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(1024);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["product_id"] = productId;
+  root["user_id"] = userId;
+  root["device_name"] = deviceName;
+  root["device_identifier"] = deviceIdentifier;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/onboarding/device");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(2048);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
+}
+
+void HyperwisorIOT::sendSMS(const String &productId, const String &to, const String &message) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(512);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["productId"] = productId;
+  root["to"] = to;
+  root["message"] = message;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/sms-service");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("SMS sent successfully. Response: " + response);
+  } else {
+    Serial.println("Error sending SMS. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::sendSMSWithResponse(const String &productId, const String &to, const String &message) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(1024);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(512);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["productId"] = productId;
+  root["to"] = to;
+  root["message"] = message;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/sms-service");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(1024);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
 }
 
 HyperTaskManager &HyperwisorIOT::getTaskManager()
@@ -478,4 +1152,113 @@ void HyperwisorIOT::performOTA(const char *otaUrl)
   }
 
   http.end();
+}
+
+void HyperwisorIOT::authenticateUser(const String &email, const String &password) {
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    Serial.println("Error: API keys not set. Please call setApiKeys() first.");
+    return;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(512);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["email"] = email;
+  root["password"] = password;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/auth/signin");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Authentication successful. Response: " + response);
+  } else {
+    Serial.println("Error during authentication. HTTP Response code: " + String(httpResponseCode));
+  }
+  
+  http.end();
+}
+
+DynamicJsonDocument HyperwisorIOT::authenticateUserWithResponse(const String &email, const String &password) {
+  // Create a JSON document to hold the response
+  DynamicJsonDocument responseDoc(1024);
+  JsonObject response = responseDoc.to<JsonObject>();
+  
+  // Check if API keys are set
+  if (apiKey.isEmpty() || secretKey.isEmpty()) {
+    response["success"] = false;
+    response["error"] = "API keys not set. Please call setApiKeys() first.";
+    return responseDoc;
+  }
+
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    response["success"] = false;
+    response["error"] = "No WiFi connection.";
+    return responseDoc;
+  }
+
+  // Create JSON payload
+  DynamicJsonDocument doc(512);
+  JsonObject root = doc.to<JsonObject>();
+  
+  root["email"] = email;
+  root["password"] = password;
+
+  // Send HTTP POST request
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate verification (not recommended for production)
+  HTTPClient http;
+  
+  http.begin(client, "https://cgsuxlbravclbbpnvfky.supabase.co/functions/v1/manufacturer-api/auth/signin");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", this->apiKey);
+  http.addHeader("x-secret-key", this->secretKey);
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String httpResponse = http.getString();
+    response["success"] = true;
+    response["http_response_code"] = httpResponseCode;
+    
+    // Try to parse the response as JSON
+    DynamicJsonDocument responsePayload(1024);
+    DeserializationError error = deserializeJson(responsePayload, httpResponse);
+    if (!error) {
+      response["data"] = responsePayload.as<JsonObject>();
+    } else {
+      response["raw_response"] = httpResponse;
+    }
+  } else {
+    response["success"] = false;
+    response["http_response_code"] = httpResponseCode;
+    response["error"] = "HTTP request failed";
+  }
+  
+  http.end();
+  return responseDoc;
 }
