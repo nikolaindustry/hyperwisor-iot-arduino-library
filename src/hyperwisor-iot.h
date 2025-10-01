@@ -10,6 +10,7 @@
 #include <DNSServer.h>
 #include <HTTPClient.h>
 #include "HyperTaskManager.h"
+#include <ArduinoJson.h>
 
 typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
@@ -29,6 +30,33 @@ public:
   void restoreAllGPIOStates();
   String getDeviceId();
   void sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
+  void updateWidget(const String &targetId, const String &widgetId, const String &value);
+  void updateWidget(const String &targetId, const String &widgetId, float value);
+  void sendDeviceStatus(const String &targetId);
+
+ 
+  
+  void setApiKeys(const String &apiKey, const String &secretKey);
+  
+  // Database functions
+  void insertDatainDatabase(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder);
+  DynamicJsonDocument insertDatainDatabaseWithResponse(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder);
+  void getDatabaseData(const String &productId, const String &tableName, int limit = 50);
+  DynamicJsonDocument getDatabaseDataWithResponse(const String &productId, const String &tableName, int limit = 50);
+  void updateDatabaseData(const String &dataId, std::function<void(JsonObject &)> dataBuilder);
+  DynamicJsonDocument updateDatabaseDataWithResponse(const String &dataId, std::function<void(JsonObject &)> dataBuilder);
+  void deleteDatabaseData(const String &dataId);
+  DynamicJsonDocument deleteDatabaseDataWithResponse(const String &dataId);
+  
+  // Device onboarding functions
+  void onboardDevice(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier);
+  DynamicJsonDocument onboardDeviceWithResponse(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier);
+
+  // JSON response versions
+  void sendSMS(const String &productId, const String &to, const String &message);
+  DynamicJsonDocument sendSMSWithResponse(const String &productId, const String &to, const String &message);
+  void authenticateUser(const String &email, const String &password);
+  DynamicJsonDocument authenticateUserWithResponse(const String &email, const String &password);
 
 private:
   // WiFi & Real-time Communication
@@ -45,13 +73,17 @@ private:
   void startAPMode();
   void handle_provision();
   void connectToWiFi();
-
   String getSuccessHtml();
   String getErrorHtml(String errorMessage);
+
+
+
+
   UserCommandCallback userCommandCallback = nullptr;
 
   // Credentials and config
   String ssid, password, userid, deviceid, productid, email, loaclip, macid, newtarget, versionid;
+  String apiKey, secretKey;
   const char *apSSID = "NIKOLAINDUSTRY_Setup";
   const char *apPassword = "0123456789";
   String fversion = "0.0.1";
