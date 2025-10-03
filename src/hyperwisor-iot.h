@@ -11,6 +11,8 @@
 #include <HTTPClient.h>
 #include "HyperTaskManager.h"
 #include <ArduinoJson.h>
+#include <time.h>
+#include <sys/time.h>
 
 typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
@@ -37,6 +39,13 @@ public:
  
   
   void setApiKeys(const String &apiKey, const String &secretKey);
+  
+  // Time and date functions
+  void initNTP();
+  void setTimezone(const char* timezone);
+  String getNetworkTime();
+  String getNetworkDate();
+  String getNetworkDateTime();
   
   // Database functions
   void insertDatainDatabase(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder);
@@ -93,6 +102,10 @@ private:
   const unsigned long reconnectInterval = 10000;
   int retryCount = 0;
   const int maxRetries = 6;
+  
+  // NTP
+  bool ntpInitialized = false;
+  String timezone = "UTC0";  // Default to UTC
 };
 
 #endif
