@@ -20,6 +20,10 @@ void HyperwisorIOT::begin()
   {
     startAPMode();
   }
+  
+  // Initialize NTP for time functions
+  initNTP();
+  
   taskManager.begin();
 }
 
@@ -1261,4 +1265,165 @@ DynamicJsonDocument HyperwisorIOT::authenticateUserWithResponse(const String &em
   
   http.end();
   return responseDoc;
+}
+
+// Time and date functions using NTP
+void HyperwisorIOT::initNTP() {
+  if (!ntpInitialized) {
+    // Configure NTP only once with timezone support
+    // Parse timezone to get offset values
+    long gmtOffset = 0;
+    int daylightOffset = 0;
+    
+    // Simple parsing for common timezone formats
+    if (timezone.startsWith("IST")) {
+      gmtOffset = 5 * 3600 + 30 * 60;  // UTC+5:30
+    } else if (timezone.startsWith("EST")) {
+      gmtOffset = -5 * 3600;  // UTC-5
+    } else if (timezone.startsWith("PST")) {
+      gmtOffset = -8 * 3600;  // UTC-8
+    } else if (timezone.startsWith("UTC")) {
+      gmtOffset = 0;  // UTC
+    }
+    
+    // Configure NTP servers with timezone offsets
+    configTime(gmtOffset, daylightOffset, "pool.ntp.org", "time.nist.gov");
+    ntpInitialized = true;
+    
+    // Wait for time to be synchronized (but don't block forever)
+    time_t now = time(nullptr);
+    int retry = 0;
+    while (now < 1000000000L && retry < 5) {
+      delay(500);
+      now = time(nullptr);
+      retry++;
+    }
+    
+    if (now < 1000000000L) {
+      Serial.println("Warning: Failed to synchronize with NTP server immediately, will try again when needed.");
+    } else {
+      Serial.println("NTP time synchronized successfully.");
+    }
+  }
+}
+
+void HyperwisorIOT::setTimezone(const char* timezone) {
+  this->timezone = String(timezone);
+  
+  // If NTP is already initialized, we need to reconfigure with new timezone
+  if (ntpInitialized) {
+    ntpInitialized = false;  // Reset flag to force reinitialization
+    initNTP();  // Reinitialize with new timezone
+  }
+}
+
+String HyperwisorIOT::getNetworkTime() {
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return "";
+  }
+
+  // Initialize NTP if not already done
+  initNTP();
+  
+  // Get current time
+  time_t now = time(nullptr);
+  
+  // If time is not synchronized, try again
+  if (now < 1000000000L) {
+    int retry = 0;
+    while (now < 1000000000L && retry < 5) {
+      delay(500);
+      now = time(nullptr);
+      retry++;
+    }
+    
+    if (now < 1000000000L) {
+      Serial.println("Error: Failed to get time from NTP server.");
+      return "";
+    }
+  }
+  
+  // Format time as HH:MM:SS with local timezone adjustment
+  struct tm timeinfo;
+  localtime_r(&now, &timeinfo);  // Use localtime_r instead of gmtime_r for timezone support
+  char timeBuffer[9];
+  strftime(timeBuffer, sizeof(timeBuffer), "%H:%M:%S", &timeinfo);
+  
+  return String(timeBuffer);
+}
+
+String HyperwisorIOT::getNetworkDate() {
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return "";
+  }
+
+  // Initialize NTP if not already done
+  initNTP();
+  
+  // Get current time
+  time_t now = time(nullptr);
+  
+  // If time is not synchronized, try again
+  if (now < 1000000000L) {
+    int retry = 0;
+    while (now < 1000000000L && retry < 5) {
+      delay(500);
+      now = time(nullptr);
+      retry++;
+    }
+    
+    if (now < 1000000000L) {
+      Serial.println("Error: Failed to get date from NTP server.");
+      return "";
+    }
+  }
+  
+  // Format date as YYYY-MM-DD with local timezone adjustment
+  struct tm timeinfo;
+  localtime_r(&now, &timeinfo);  // Use localtime_r instead of gmtime_r for timezone support
+  char dateBuffer[11];
+  strftime(dateBuffer, sizeof(dateBuffer), "%Y-%m-%d", &timeinfo);
+  
+  return String(dateBuffer);
+}
+
+String HyperwisorIOT::getNetworkDateTime() {
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Error: No WiFi connection.");
+    return "";
+  }
+
+  // Initialize NTP if not already done
+  initNTP();
+  
+  // Get current time
+  time_t now = time(nullptr);
+  
+  // If time is not synchronized, try again
+  if (now < 1000000000L) {
+    int retry = 0;
+    while (now < 1000000000L && retry < 5) {
+      delay(500);
+      now = time(nullptr);
+      retry++;
+    }
+    
+    if (now < 1000000000L) {
+      Serial.println("Error: Failed to get date and time from NTP server.");
+      return "";
+    }
+  }
+  
+  // Format date and time as YYYY-MM-DD HH:MM:SS with local timezone adjustment
+  struct tm timeinfo;
+  localtime_r(&now, &timeinfo);  // Use localtime_r instead of gmtime_r for timezone support
+  char dateTimeBuffer[20];
+  strftime(dateTimeBuffer, sizeof(dateTimeBuffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  
+  return String(dateTimeBuffer);
 }
