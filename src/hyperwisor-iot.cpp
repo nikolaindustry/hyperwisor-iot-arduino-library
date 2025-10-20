@@ -95,11 +95,14 @@ void HyperwisorIOT::handle_provision()
     ssid = server.arg("ssid");
     password = server.arg("password");
     deviceid = server.arg("target_id");
+    userid = server.arg("user_id");
+    
 
     preferences.begin("wifi-creds", false);
     preferences.putString("ssid", ssid);
     preferences.putString("password", password);
     preferences.putString("deviceid", deviceid);
+    preferences.putString("userid", userid);
     preferences.end();
 
     server.send(200, "text/html", getSuccessHtml());
