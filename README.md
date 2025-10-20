@@ -46,147 +46,7 @@ Built on the powerful [`nikolaindustry-realtime`](https://github.com/your-org/ni
    #include <hyperwisor-iot.h>
    ```
 
----
 
-## 🧪 Example Usage
-
-```cpp
-#include <hyperwisor-iot.h>
-
-String from = "";
-HyperwisorIOT hyper;
-
-void setup() {
-  Serial.begin(115200);
-  hyper.begin();
-
-  hyper.restoreAllGPIOStates();
-  hyper.getTaskManager().restoreAllTasks();
-
-  hyper.setUserCommandHandler([](JsonObject& msg) {
-    if (msg.containsKey("from")) {
-      from = msg["from"].as<String>();
-      Serial.println("Message from: " + from);
-    }
-
-    if (!msg.containsKey("payload")) return;
-    JsonObject payload = msg["payload"];
-    JsonArray commands = payload["commands"];
-
-    for (JsonObject commandObj : commands) {
-      if (strcmp(commandObj["command"], "TASK") != 0) continue;
-
-      JsonArray actions = commandObj["actions"];
-      for (JsonObject actionObj : actions) {
-        const char* action = actionObj["action"];
-        JsonObject params = actionObj["params"];
-        int pin = params["pin"] | -1;
-        String taskId = actionObj["id"] | "";
-        bool immunity = params["immunity"] | false;
-
-        if (strcmp(action, "blink") == 0) {
-          hyper.getTaskManager().addBlink(pin, params["on"], params["off"], params["repeat"], taskId, immunity);
-
-        } else if (strcmp(action, "fade") == 0) {
-          hyper.getTaskManager().addFade(pin, params["start"], params["end"], params["duration"], taskId, immunity);
-
-        } else if (strcmp(action, "pulse") == 0) {
-          hyper.getTaskManager().addPulse(pin, params["duration"], params["state"], taskId, immunity);
-
-        } else if (strcmp(action, "toggle") == 0) {
-          hyper.getTaskManager().addToggle(pin, params["interval"], taskId, immunity);
-
-        } else if (strcmp(action, "delay") == 0) {
-          hyper.getTaskManager().addDelay(pin, params["delay"], params["state"], taskId, immunity);
-
-        } else if (strcmp(action, "interval") == 0) {
-          hyper.getTaskManager().addInterval(pin, params["interval"], [](int pin) {
-            Serial.printf("Interval callback on pin %d\n", pin);
-          }, taskId, immunity);
-
-        } else if (strcmp(action, "ramp") == 0) {
-          hyper.getTaskManager().addRamp(pin, params["start"], params["end"], params["duration"], taskId, immunity);
-
-        } else if (strcmp(action, "pwmsweep") == 0) {
-          hyper.getTaskManager().addPWMSweep(pin, params["start"], params["end"], params["step"], params["delay"], taskId, immunity);
-
-        } else if (strcmp(action, "debounce") == 0) {
-          hyper.getTaskManager().addDebounce(pin, params["debounce"], [](int pin, int state) {
-            Serial.printf("Debounced pin %d state %d\n", pin, state);
-          }, taskId, immunity);
-
-        } else if (strcmp(action, "sequence") == 0) {
-          JsonArray seq = params["sequence"];
-          JsonArray times = params["timings"];
-          int len = seq.size();
-          int* sequenceArray = new int[len];
-          int* timingArray = new int[len];
-          for (int i = 0; i < len; i++) {
-            sequenceArray[i] = seq[i].as<int>();
-            timingArray[i] = times[i].as<int>();
-          }
-          hyper.getTaskManager().addSequence(pin, sequenceArray, timingArray, len, taskId, immunity);
-          delete[] sequenceArray;
-          delete[] timingArray;
-
-        } else if (strcmp(action, "timeout_restore") == 0) {
-          hyper.getTaskManager().addTimeoutRestore(pin, params["state"], params["timeout"], taskId, immunity);
-
-        } else if (strcmp(action, "cancel") == 0) {
-          bool result = hyper.getTaskManager().cancelTaskById(taskId);
-          Serial.printf("Cancel task %s: %s\n", taskId.c_str(), result ? "Success" : "Failed");
-
-          hyper.sendTo(from, [taskId, result](JsonObject& payload) {
-            JsonObject action = payload.createNestedArray("commands").createNestedObject();
-            action["command"] = "task";
-            JsonObject cancel = action.createNestedArray("actions").createNestedObject();
-            cancel["action"] = "cancel_response";
-            JsonObject p = cancel.createNestedObject("params");
-            p["id"] = taskId;
-            p["success"] = result;
-          });
-
-        } else if (strcmp(action, "status") == 0) {
-          String status = hyper.getTaskManager().getTaskStatusById(taskId);
-          Serial.printf("Status of task %s: %s\n", taskId.c_str(), status.c_str());
-
-          hyper.sendTo(from, [taskId, status](JsonObject& payload) {
-            JsonObject action = payload.createNestedArray("commands").createNestedObject();
-            action["command"] = "task";
-            JsonObject res = action.createNestedArray("actions").createNestedObject();
-            res["action"] = "status_response";
-            JsonObject p = res.createNestedObject("params");
-            p["id"] = taskId;
-            p["status"] = status;
-          });
-        }
-      }
-    }
-  });
-
-  Serial.println("Ready to receive tasks.");
-}
-
-void loop() {
-  hyper.loop();
-}
-
-
-```
-
----
-
-## ⚙️ Wi-Fi Provisioning
-
-If the device can't connect to Wi-Fi, it starts in **AP Mode**, hosting an HTTP server and DNS server for provisioning. Access `192.168.4.1` and submit the form to set:
-
-* `ssid`
-* `password`
-* `target_id`
-
-Upon success, the ESP32 saves credentials in NVS and restarts.
-
----
 
 ## 🌐 Command Structure
 
@@ -215,19 +75,6 @@ Supports rich JSON messages from the server:
 }
 ```
 
----
-
-## 🔄 OTA Firmware Update
-
-Send an `OTA` command with `ota_update` action and a valid `url`. The library:
-
-* Downloads the binary via HTTPS
-* Validates and applies update
-* Sends status messages back to the `from` target
-* Restarts the device after update
-
----
-
 ## 🧠 Internals
 
 On `hyper.begin()`:
@@ -241,18 +88,6 @@ On `hyper.begin()`:
 
 ---
 
-## 📤 Sending Data
-
-Use the `sendTo()` method to respond or send commands:
-
-```cpp
-hyper.sendTo(targetId, [](JsonObject& payload) {
-  JsonArray commands = payload.createNestedArray("commands");
-  // build your message
-});
-```
-
----
 
 ## 📚 Dependencies
 * [`hyperwisor.com`](https://www.hyperwisor.com/)
@@ -265,29 +100,7 @@ hyper.sendTo(targetId, [](JsonObject& payload) {
 
 Install all via Arduino Library Manager.
 
----
 
-# ✍️ Extend the Library
-You can add:
-### Custom command actions
-### I2C/RS485 control routines
-### Sensor integrations (DHT, BMP280, etc.)
-### Device-side condition/logic evaluation
-### Advanced scheduling or data logging
----
-
-## 🔐 Persistent Storage Keys
-
-| Key        | Purpose                 |
-| ---------- | ----------------------- |
-| `ssid`     | Wi-Fi SSID              |
-| `password` | Wi-Fi Password          |
-| `deviceid` | Unique ID for backend   |
-| `userid`   | Optional user field     |
-| `email`    | Optional user email     |
-| `firmware` | Last known firmware ver |
-
----
 
 ## 🧾 License
 
