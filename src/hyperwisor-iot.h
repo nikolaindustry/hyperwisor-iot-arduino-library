@@ -19,27 +19,40 @@ typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 class HyperwisorIOT
 {
 public:
+
+  // Constructor
   HyperwisorIOT();
+
+  // Core functions
   void begin();
   void loop();
+
+  // API key and secret key
+  void setApiKeys(const String &apiKey, const String &secretKey);
 
   // User-defined command callback
   void setUserCommandHandler(UserCommandCallback cb);
   void sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder);
-  HyperTaskManager &getTaskManager();
+
+  // GPIO functions
   void saveGPIOState(int pin, int state);
   int loadGPIOState(int pin);
   void restoreAllGPIOStates();
+
+  // Device info
   String getDeviceId();
   String getUserId();
-  void sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
+
+
+  // Data logger
+  void send_Sensor_Data_logger(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
+
+  // Widget functions
   void updateWidget(const String &targetId, const String &widgetId, const String &value);
   void updateWidget(const String &targetId, const String &widgetId, float value);
-  void sendDeviceStatus(const String &targetId);
 
- 
-  
-  void setApiKeys(const String &apiKey, const String &secretKey);
+  // Device status
+  void sendDeviceStatus(const String &targetId);
   
   // Time and date functions
   void initNTP();
@@ -65,8 +78,13 @@ public:
   // JSON response versions
   void sendSMS(const String &productId, const String &to, const String &message);
   DynamicJsonDocument sendSMSWithResponse(const String &productId, const String &to, const String &message);
+
+  // Authentication
   void authenticateUser(const String &email, const String &password);
   DynamicJsonDocument authenticateUserWithResponse(const String &email, const String &password);
+
+  // Task manager
+  HyperTaskManager &getTaskManager();
 
 private:
   // WiFi & Real-time Communication
@@ -88,12 +106,14 @@ private:
 
 
 
-
+  // User-defined command callback
   UserCommandCallback userCommandCallback = nullptr;
 
   // Credentials and config
   String ssid, password, userid, deviceid, productid, email, loaclip, macid, newtarget, versionid;
   String apiKey, secretKey;
+
+  // AP Mode
   const char *apSSID = "NIKOLAINDUSTRY_Setup";
   const char *apPassword = "0123456789";
   String fversion = "0.0.1";
