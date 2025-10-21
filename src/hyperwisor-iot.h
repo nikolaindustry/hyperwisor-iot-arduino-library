@@ -31,6 +31,7 @@ public:
   int loadGPIOState(int pin);
   void restoreAllGPIOStates();
   String getDeviceId();
+  String getUserId();
   void sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
   void updateWidget(const String &targetId, const String &widgetId, const String &value);
   void updateWidget(const String &targetId, const String &widgetId, float value);
