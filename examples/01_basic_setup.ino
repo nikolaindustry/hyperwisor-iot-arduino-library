@@ -29,28 +29,19 @@ void setup() {
     String command = payload["command"].as<String>();
     Serial.println(command);
     if (command == "get_ui") {
-      //add update dashbaord logic here
+      //add update dashbaord logic here when user open the dashboard
     }
 
+    // Get command
+    JsonObject commandName = hyper.findCommand(payload, "commandName");
+    if (commandName.isNull()) return;
+    Serial.println("commandName command found");
 
-    // Get "Operate" command
-    JsonObject operate = hyper.findCommand(payload, "Operate");
-    if (operate.isNull()) return;
-    Serial.println("Operate command found");
-
-    // // Lock action
-    // JsonObject lockParams = hyper.findParams(payload, "Operate", "Lock");
-    // if (!lockParams.isNull()) {
-    //   String gpio = lockParams["gpio"] | "N/A";
-    //   String status = lockParams["status"] | "N/A";
-    // }
-
-    // // Unlock action
-    // JsonObject unlockParams = hyper.findParams(payload, "Operate", "Unlock");
-    // if (!unlockParams.isNull()) {
-    //   String gpio = unlockParams["gpio"] | "N/A";
-    //   String status = unlockParams["status"] | "N/A";
-    // }
+    // Get action
+    JsonObject actionParams = hyper.findAction(payload, "commandName", "actionName");
+    if (!actionParams.isNull()) {
+      String paramsValue = actionParams["paramsKey"] | "N/A";
+    }
   });
 }
 
