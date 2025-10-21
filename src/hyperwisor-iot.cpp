@@ -335,9 +335,17 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
 
 String HyperwisorIOT::getDeviceId()
 {
-
   preferences.begin("wifi-creds", true);
   String id = preferences.getString("deviceid", "unknown");
+  preferences.end();
+  return id;
+}
+
+ 
+String HyperwisorIOT::getUserId()
+{
+  preferences.begin("wifi-creds", true);
+  String id = preferences.getString("userid", "unknown");
   preferences.end();
   return id;
 }
