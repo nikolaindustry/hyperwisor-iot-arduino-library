@@ -12,20 +12,24 @@ String msgfrom = "";
 void setup() {
   Serial.begin(115200);
   Wire.begin(4, 5);
-
   pcf8574_relays.begin();
-
   pcf8574_relays.pinMode(P3, OUTPUT);
   pcf8574_relays.pinMode(P2, OUTPUT);
 
+  // API key and secret key
   hyper.setApiKeys("mk_4a9c4f312...", "msk_b78602...");
 
+  // Time and date functions
   hyper.setTimezone("IST");
 
+  // Core functions
   hyper.begin();
+
+  // Device info
   deviceId = hyper.getDeviceId();
   userId = hyper.getUserId();
-
+  
+  // User-defined command callback
   hyper.setUserCommandHandler([](JsonObject& msg) {
     if (!msg.containsKey("payload")) return;
 
@@ -102,11 +106,10 @@ void setup() {
       }
     }
   });
-
-
 }
 
 void loop() {
+  // Core functions
   hyper.loop();
   delay(50);
 }
