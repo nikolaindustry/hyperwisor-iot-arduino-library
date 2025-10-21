@@ -40,7 +40,7 @@ void setup() {
     // Get action
     JsonObject actionParams = hyper.findAction(payload, "commandName", "actionName");
     if (!actionParams.isNull()) {
-      String paramsValue = actionParams["paramsKey"] | "N/A";
+      String paramsValue = actionParams["params"]["paramsKey"] | "N/A";
     }
   });
 }
