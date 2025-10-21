@@ -86,6 +86,11 @@ public:
   // Task manager
   HyperTaskManager &getTaskManager();
 
+  // JSON utility functions
+  JsonObject findCommand(JsonObject& payload, const char* commandName);
+  JsonObject findAction(JsonObject& payload, const char* commandName, const char* actionName);
+  JsonObject findParams(JsonObject& payload, const char* commandName, const char* actionName);
+
 private:
   // WiFi & Real-time Communication
   nikolaindustryrealtime realtime;
