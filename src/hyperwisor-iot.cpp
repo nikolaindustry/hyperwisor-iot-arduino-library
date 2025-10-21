@@ -4,10 +4,12 @@ Preferences preferences;
 Preferences gpioPreferences;
 bool provision_request = false;
 
+// Constructor
 HyperwisorIOT::HyperwisorIOT()
 {
 }
 
+// Public methods
 void HyperwisorIOT::begin()
 {
   getcredentials();
@@ -27,6 +29,7 @@ void HyperwisorIOT::begin()
   taskManager.begin();
 }
 
+// void HyperwisorIOT::begin()
 // void HyperwisorIOT::loop()
 // {
 //   realtime.loop();
@@ -41,6 +44,7 @@ void HyperwisorIOT::begin()
 unsigned long apStartTime = 0;
 bool apStarted = false;
 
+// Private methods
 void HyperwisorIOT::loop()
 {
   realtime.loop();
@@ -71,6 +75,8 @@ void HyperwisorIOT::loop()
   // Reconnect attempt (same as above)
 }
 
+
+// AP mode
 void HyperwisorIOT::startAPMode()
 {
   Serial.println("Starting in AP mode...");
@@ -88,6 +94,7 @@ void HyperwisorIOT::startAPMode()
   Serial.println("HTTP server started.");
 }
 
+// Provisioning
 void HyperwisorIOT::handle_provision()
 {
   if (server.hasArg("ssid") && server.arg("ssid").length() > 0)
@@ -116,6 +123,7 @@ void HyperwisorIOT::handle_provision()
   }
 }
 
+// Provisioning success
 String HyperwisorIOT::getSuccessHtml()
 {
   String message = "Device_is_connecting_to_the_new_network.";
@@ -148,6 +156,7 @@ String HyperwisorIOT::getSuccessHtml()
 )rawliteral";
 }
 
+// Provisioning error
 String HyperwisorIOT::getErrorHtml(String errorMessage)
 {
   String redirectUrl = "hypervisorv4://provisioning?status=error&message=" + errorMessage;
@@ -182,6 +191,7 @@ String HyperwisorIOT::getErrorHtml(String errorMessage)
 )rawliteral";
 }
 
+// Load credentials
 void HyperwisorIOT::getcredentials()
 {
 
@@ -203,6 +213,7 @@ void HyperwisorIOT::getcredentials()
   Serial.println(deviceid);
 }
 
+// Connect to WiFi
 void HyperwisorIOT::connectToWiFi()
 {
   const char *hostname = "NIKOLAINDUSTRY_Device";
@@ -233,6 +244,7 @@ void HyperwisorIOT::connectToWiFi()
     startAPMode();
   }
 }
+
 
 void HyperwisorIOT::setupMessageHandler()
 {
@@ -328,11 +340,13 @@ void HyperwisorIOT::setupMessageHandler()
                                   } });
 }
 
+// Set the user's custom command handler
 void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
 {
   userCommandCallback = cb;
 }
 
+// Get device ID
 String HyperwisorIOT::getDeviceId()
 {
   preferences.begin("wifi-creds", true);
@@ -341,7 +355,7 @@ String HyperwisorIOT::getDeviceId()
   return id;
 }
 
- 
+// Get user ID
 String HyperwisorIOT::getUserId()
 {
   preferences.begin("wifi-creds", true);
@@ -350,6 +364,7 @@ String HyperwisorIOT::getUserId()
   return id;
 }
 
+// Send a message to a target
 void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder)
 {
   DynamicJsonDocument doc(512); // Adjust size as needed
@@ -363,7 +378,8 @@ void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject
   realtime.sendJson(root); // ✅ Pass JsonObject directly
 }
 
-void HyperwisorIOT::sendSensorData(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList)
+// Send sensor data to a target
+void HyperwisorIOT::send_Sensor_Data_logger(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList)
 {
   String deviceId = getDeviceId();
 
@@ -379,6 +395,7 @@ void HyperwisorIOT::sendSensorData(const String &targetId, const String &configI
     } });
 }
 
+// Update a widget with a string value
 void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, const String &value) {
   sendTo(targetId, [&](JsonObject &payload) {
     payload["widgetId"] = widgetId;
@@ -386,6 +403,7 @@ void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId,
   });
 }
 
+// Update a widget with a float value
 void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, float value) {
   sendTo(targetId, [&](JsonObject &payload) {
     payload["widgetId"] = widgetId;
@@ -393,6 +411,7 @@ void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId,
   });
 }
 
+// Send device status to a target
 void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   realtime.sendTo(targetId, [](JsonObject &payload) {
     payload["status"] = "online";
@@ -400,11 +419,13 @@ void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   });
 }
 
+// Set API keys for database operations
 void HyperwisorIOT::setApiKeys(const String &apiKey, const String &secretKey) {
   this->apiKey = apiKey;
   this->secretKey = secretKey;
 }
 
+// Insert data into a database
 void HyperwisorIOT::insertDatainDatabase(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -454,6 +475,7 @@ void HyperwisorIOT::insertDatainDatabase(const String &productId, const String &
   http.end();
 }
 
+// Insert data into a database and get a response
 DynamicJsonDocument HyperwisorIOT::insertDatainDatabaseWithResponse(const String &productId, const String &deviceId, const String &tableName, std::function<void(JsonObject &)> dataBuilder) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(1024);
@@ -522,6 +544,7 @@ DynamicJsonDocument HyperwisorIOT::insertDatainDatabaseWithResponse(const String
   return responseDoc;
 }
 
+// Get database data
 void HyperwisorIOT::getDatabaseData(const String &productId, const String &tableName, int limit) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -562,6 +585,7 @@ void HyperwisorIOT::getDatabaseData(const String &productId, const String &table
   http.end();
 }
 
+// Get database data and get a response
 DynamicJsonDocument HyperwisorIOT::getDatabaseDataWithResponse(const String &productId, const String &tableName, int limit) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(2048);
@@ -621,6 +645,7 @@ DynamicJsonDocument HyperwisorIOT::getDatabaseDataWithResponse(const String &pro
   return responseDoc;
 }
 
+// Update database data
 void HyperwisorIOT::updateDatabaseData(const String &dataId, std::function<void(JsonObject &)> dataBuilder) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -667,6 +692,7 @@ void HyperwisorIOT::updateDatabaseData(const String &dataId, std::function<void(
   http.end();
 }
 
+// Update database data and get a response
 DynamicJsonDocument HyperwisorIOT::updateDatabaseDataWithResponse(const String &dataId, std::function<void(JsonObject &)> dataBuilder) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(2048);
@@ -732,6 +758,7 @@ DynamicJsonDocument HyperwisorIOT::updateDatabaseDataWithResponse(const String &
   return responseDoc;
 }
 
+// Delete database data
 void HyperwisorIOT::deleteDatabaseData(const String &dataId) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -767,6 +794,7 @@ void HyperwisorIOT::deleteDatabaseData(const String &dataId) {
   http.end();
 }
 
+// Delete database data and get a response
 DynamicJsonDocument HyperwisorIOT::deleteDatabaseDataWithResponse(const String &dataId) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(1024);
@@ -821,6 +849,7 @@ DynamicJsonDocument HyperwisorIOT::deleteDatabaseDataWithResponse(const String &
   return responseDoc;
 }
 
+// Onboard a device
 void HyperwisorIOT::onboardDevice(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -868,6 +897,7 @@ void HyperwisorIOT::onboardDevice(const String &productId, const String &userId,
   http.end();
 }
 
+// Onboard a device and get a response
 DynamicJsonDocument HyperwisorIOT::onboardDeviceWithResponse(const String &productId, const String &userId, const String &deviceName, const String &deviceIdentifier) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(2048);
@@ -934,6 +964,7 @@ DynamicJsonDocument HyperwisorIOT::onboardDeviceWithResponse(const String &produ
   return responseDoc;
 }
 
+// Send SMS
 void HyperwisorIOT::sendSMS(const String &productId, const String &to, const String &message) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -980,6 +1011,7 @@ void HyperwisorIOT::sendSMS(const String &productId, const String &to, const Str
   http.end();
 }
 
+// Send SMS and get a response
 DynamicJsonDocument HyperwisorIOT::sendSMSWithResponse(const String &productId, const String &to, const String &message) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(1024);
@@ -1045,11 +1077,13 @@ DynamicJsonDocument HyperwisorIOT::sendSMSWithResponse(const String &productId, 
   return responseDoc;
 }
 
+// Get task manager
 HyperTaskManager &HyperwisorIOT::getTaskManager()
 {
   return taskManager;
 }
 
+// Save GPIO state
 void HyperwisorIOT::saveGPIOState(int pin, int state)
 {
   gpioPreferences.begin("gpio-states", false);
@@ -1057,6 +1091,7 @@ void HyperwisorIOT::saveGPIOState(int pin, int state)
   gpioPreferences.end();
 }
 
+// Load GPIO state
 int HyperwisorIOT::loadGPIOState(int pin)
 {
   gpioPreferences.begin("gpio-states", false);
@@ -1064,6 +1099,7 @@ int HyperwisorIOT::loadGPIOState(int pin)
   gpioPreferences.end();
 }
 
+// Restore all GPIO states
 void HyperwisorIOT::restoreAllGPIOStates()
 {
   gpioPreferences.begin("gpio-states", false);
@@ -1081,6 +1117,7 @@ void HyperwisorIOT::restoreAllGPIOStates()
   gpioPreferences.end();
 }
 
+// Perform OTA
 void HyperwisorIOT::performOTA(const char *otaUrl)
 {
   String firmwarefeedback;
@@ -1169,6 +1206,7 @@ void HyperwisorIOT::performOTA(const char *otaUrl)
   http.end();
 }
 
+// Authenticate user
 void HyperwisorIOT::authenticateUser(const String &email, const String &password) {
   // Check if API keys are set
   if (apiKey.isEmpty() || secretKey.isEmpty()) {
@@ -1214,6 +1252,7 @@ void HyperwisorIOT::authenticateUser(const String &email, const String &password
   http.end();
 }
 
+// Authenticate user with response
 DynamicJsonDocument HyperwisorIOT::authenticateUserWithResponse(const String &email, const String &password) {
   // Create a JSON document to hold the response
   DynamicJsonDocument responseDoc(1024);
@@ -1318,6 +1357,7 @@ void HyperwisorIOT::initNTP() {
   }
 }
 
+// Set timezone
 void HyperwisorIOT::setTimezone(const char* timezone) {
   this->timezone = String(timezone);
   
@@ -1328,6 +1368,7 @@ void HyperwisorIOT::setTimezone(const char* timezone) {
   }
 }
 
+// Get network time
 String HyperwisorIOT::getNetworkTime() {
   // Check WiFi connection
   if (WiFi.status() != WL_CONNECTED) {
@@ -1365,6 +1406,7 @@ String HyperwisorIOT::getNetworkTime() {
   return String(timeBuffer);
 }
 
+// Get network date
 String HyperwisorIOT::getNetworkDate() {
   // Check WiFi connection
   if (WiFi.status() != WL_CONNECTED) {
@@ -1402,6 +1444,7 @@ String HyperwisorIOT::getNetworkDate() {
   return String(dateBuffer);
 }
 
+// Get network date and time
 String HyperwisorIOT::getNetworkDateTime() {
   // Check WiFi connection
   if (WiFi.status() != WL_CONNECTED) {
