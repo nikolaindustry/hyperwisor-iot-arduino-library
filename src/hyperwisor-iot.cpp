@@ -1481,3 +1481,34 @@ String HyperwisorIOT::getNetworkDateTime() {
   
   return String(dateTimeBuffer);
 }
+
+// ✅ Find command by name
+JsonObject HyperwisorIOT::findCommand(JsonObject& payload, const char* commandName) {
+  if (!payload.containsKey("commands")) return JsonObject();
+  for (JsonObject commandObj : payload["commands"].as<JsonArray>()) {
+    if (strcmp(commandObj["command"], commandName) == 0) {
+      return commandObj;
+    }
+  }
+  return JsonObject(); // Not found
+}
+
+// ✅ Find action inside a command
+JsonObject HyperwisorIOT::findAction(JsonObject& payload, const char* commandName, const char* actionName) {
+  JsonObject commandObj = findCommand(payload, commandName);
+  if (commandObj.isNull() || !commandObj.containsKey("actions")) return JsonObject();
+
+  for (JsonObject actionObj : commandObj["actions"].as<JsonArray>()) {
+    if (strcmp(actionObj["action"], actionName) == 0) {
+      return actionObj;
+    }
+  }
+  return JsonObject();
+}
+
+// ✅ Get params of a specific action
+JsonObject HyperwisorIOT::findParams(JsonObject& payload, const char* commandName, const char* actionName) {
+  JsonObject actionObj = findAction(payload, commandName, actionName);
+  if (actionObj.isNull() || !actionObj.containsKey("params")) return JsonObject();
+  return actionObj["params"].as<JsonObject>();
+}
