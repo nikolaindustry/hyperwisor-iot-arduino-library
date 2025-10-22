@@ -14,6 +14,13 @@
 #include <time.h>
 #include <sys/time.h>
 
+// Heat map data point structure
+struct HeatMapPoint {
+  int x;
+  int y;
+  int value;
+};
+
 typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
 class HyperwisorIOT
@@ -53,6 +60,18 @@ public:
   
   // Dialog functions
   void showDialog(const String &targetId, const String &title, const String &description, const String &icon = "info"); // icon options: info (default), warning, success, error, risk
+  
+  // Flight attitude meter functions
+  void updateFlightAttitude(const String &targetId, const String &widgetId, float roll, float pitch);
+  
+  // Widget position, size, and rotation functions
+  void updateWidgetPosition(const String &targetId, const String &widgetId, int x, int y, int w, int h, int r = 0);
+  
+  // Countdown widget functions
+  void updateCountdown(const String &targetId, const String &widgetId, const String &hours, const String &minutes, const String &seconds);
+  
+  // Heat map widget functions
+  void updateHeatMap(const String &targetId, const String &widgetId, const std::vector<HeatMapPoint> &dataPoints);
 
   // Device status
   void sendDeviceStatus(const String &targetId);
