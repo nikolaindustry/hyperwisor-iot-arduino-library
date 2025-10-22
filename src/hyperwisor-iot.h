@@ -50,6 +50,9 @@ public:
   // Widget functions
   void updateWidget(const String &targetId, const String &widgetId, const String &value);
   void updateWidget(const String &targetId, const String &widgetId, float value);
+  
+  // Dialog functions
+  void showDialog(const String &targetId, const String &title, const String &description, const String &icon = "info"); // icon options: info (default), warning, success, error, risk
 
   // Device status
   void sendDeviceStatus(const String &targetId);
