@@ -72,6 +72,9 @@ public:
   
   // Heat map widget functions
   void updateHeatMap(const String &targetId, const String &widgetId, const std::vector<HeatMapPoint> &dataPoints);
+  
+  // 3D model widget functions
+  void update3DModel(const String &targetId, const String &widgetId, const String &modelUrl);
 
   // Device status
   void sendDeviceStatus(const String &targetId);
