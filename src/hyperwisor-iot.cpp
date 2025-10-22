@@ -468,6 +468,14 @@ void HyperwisorIOT::updateHeatMap(const String &targetId, const String &widgetId
   });
 }
 
+// Update 3D model widget
+void HyperwisorIOT::update3DModel(const String &targetId, const String &widgetId, const String &modelUrl) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    payload["value"] = modelUrl;
+  });
+}
+
 // Send device status to a target
 void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   realtime.sendTo(targetId, [](JsonObject &payload) {
