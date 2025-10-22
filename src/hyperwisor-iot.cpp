@@ -421,6 +421,53 @@ void HyperwisorIOT::showDialog(const String &targetId, const String &title, cons
   });
 }
 
+// Update flight attitude meter widget
+void HyperwisorIOT::updateFlightAttitude(const String &targetId, const String &widgetId, float roll, float pitch) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonObject value = payload.createNestedObject("value");
+    value["roll"] = roll;
+    value["pitch"] = pitch;
+  });
+}
+
+// Update widget position, size, and rotation
+void HyperwisorIOT::updateWidgetPosition(const String &targetId, const String &widgetId, int x, int y, int w, int h, int r) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    payload["x"] = x;
+    payload["y"] = y;
+    payload["w"] = w;
+    payload["h"] = h;
+    payload["r"] = r;
+  });
+}
+
+// Update countdown widget
+void HyperwisorIOT::updateCountdown(const String &targetId, const String &widgetId, const String &hours, const String &minutes, const String &seconds) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    payload["hr"] = hours;
+    payload["min"] = minutes;
+    payload["sec"] = seconds;
+  });
+}
+
+// Update heat map widget
+void HyperwisorIOT::updateHeatMap(const String &targetId, const String &widgetId, const std::vector<HeatMapPoint> &dataPoints) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonArray value = payload.createNestedArray("value");
+    
+    for (const auto &point : dataPoints) {
+      JsonObject pointObj = value.createNestedObject();
+      pointObj["x"] = point.x;
+      pointObj["y"] = point.y;
+      pointObj["value"] = point.value;
+    }
+  });
+}
+
 // Send device status to a target
 void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   realtime.sendTo(targetId, [](JsonObject &payload) {
