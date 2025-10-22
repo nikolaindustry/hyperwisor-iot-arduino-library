@@ -411,6 +411,16 @@ void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId,
   });
 }
 
+// Show a dialog to a target
+void HyperwisorIOT::showDialog(const String &targetId, const String &title, const String &description, const String &icon) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["type"] = "dialog";
+    payload["title"] = title;
+    payload["description"] = description;
+    payload["icon"] = icon;
+  });
+}
+
 // Send device status to a target
 void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   realtime.sendTo(targetId, [](JsonObject &payload) {
