@@ -411,6 +411,39 @@ void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId,
   });
 }
 
+// Update a widget with an array of float values
+void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, const std::vector<float> &values) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonArray valueArray = payload.createNestedArray("value");
+    for (const auto &val : values) {
+      valueArray.add(val);
+    }
+  });
+}
+
+// Update a widget with an array of int values
+void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, const std::vector<int> &values) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonArray valueArray = payload.createNestedArray("value");
+    for (const auto &val : values) {
+      valueArray.add(val);
+    }
+  });
+}
+
+// Update a widget with an array of String values
+void HyperwisorIOT::updateWidget(const String &targetId, const String &widgetId, const std::vector<String> &values) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonArray valueArray = payload.createNestedArray("value");
+    for (const auto &val : values) {
+      valueArray.add(val);
+    }
+  });
+}
+
 // Show a dialog to a target
 void HyperwisorIOT::showDialog(const String &targetId, const String &title, const String &description, const String &icon) {
   sendTo(targetId, [&](JsonObject &payload) {
