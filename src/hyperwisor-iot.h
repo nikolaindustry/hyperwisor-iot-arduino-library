@@ -57,6 +57,9 @@ public:
   // Widget functions
   void updateWidget(const String &targetId, const String &widgetId, const String &value);
   void updateWidget(const String &targetId, const String &widgetId, float value);
+  void updateWidget(const String &targetId, const String &widgetId, const std::vector<float> &values);
+  void updateWidget(const String &targetId, const String &widgetId, const std::vector<int> &values);
+  void updateWidget(const String &targetId, const String &widgetId, const std::vector<String> &values);
   
   // Dialog functions
   void showDialog(const String &targetId, const String &title, const String &description, const String &icon = "info"); // icon options: info (default), warning, success, error, risk
