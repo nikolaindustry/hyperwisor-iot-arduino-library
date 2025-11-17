@@ -50,6 +50,14 @@ public:
   String getDeviceId();
   String getUserId();
 
+  // Manual provisioning functions
+  void setWiFiCredentials(const String &ssid, const String &password);
+  void setDeviceId(const String &deviceId);
+  void setUserId(const String &userId);
+  void setCredentials(const String &ssid, const String &password, const String &deviceId, const String &userId = "");
+  void clearCredentials();
+  bool hasCredentials();
+
 
   // Data logger
   void send_Sensor_Data_logger(const String &targetId, const String &configId, std::initializer_list<std::pair<const char *, float>> dataList);
