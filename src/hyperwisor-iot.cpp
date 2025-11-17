@@ -364,6 +364,95 @@ String HyperwisorIOT::getUserId()
   return id;
 }
 
+// Manual provisioning: Set WiFi credentials
+void HyperwisorIOT::setWiFiCredentials(const String &ssid, const String &password)
+{
+  preferences.begin("wifi-creds", false);
+  preferences.putString("ssid", ssid);
+  preferences.putString("password", password);
+  preferences.end();
+  
+  this->ssid = ssid;
+  this->password = password;
+  
+  Serial.println("WiFi credentials saved manually.");
+}
+
+// Manual provisioning: Set device ID
+void HyperwisorIOT::setDeviceId(const String &deviceId)
+{
+  preferences.begin("wifi-creds", false);
+  preferences.putString("deviceid", deviceId);
+  preferences.end();
+  
+  this->deviceid = deviceId;
+  
+  Serial.println("Device ID saved manually.");
+}
+
+// Manual provisioning: Set user ID
+void HyperwisorIOT::setUserId(const String &userId)
+{
+  preferences.begin("wifi-creds", false);
+  preferences.putString("userid", userId);
+  preferences.end();
+  
+  this->userid = userId;
+  
+  Serial.println("User ID saved manually.");
+}
+
+// Manual provisioning: Set all credentials at once
+void HyperwisorIOT::setCredentials(const String &ssid, const String &password, const String &deviceId, const String &userId)
+{
+  preferences.begin("wifi-creds", false);
+  preferences.putString("ssid", ssid);
+  preferences.putString("password", password);
+  preferences.putString("deviceid", deviceId);
+  if (!userId.isEmpty()) {
+    preferences.putString("userid", userId);
+  }
+  preferences.end();
+  
+  this->ssid = ssid;
+  this->password = password;
+  this->deviceid = deviceId;
+  if (!userId.isEmpty()) {
+    this->userid = userId;
+  }
+  
+  Serial.println("All credentials saved manually.");
+}
+
+// Manual provisioning: Clear all credentials
+void HyperwisorIOT::clearCredentials()
+{
+  preferences.begin("wifi-creds", false);
+  preferences.clear();
+  preferences.end();
+  
+  ssid = "";
+  password = "";
+  deviceid = "";
+  userid = "";
+  email = "";
+  productid = "";
+  
+  Serial.println("All credentials cleared.");
+}
+
+// Manual provisioning: Check if credentials exist
+bool HyperwisorIOT::hasCredentials()
+{
+  preferences.begin("wifi-creds", true);
+  bool hasSsid = preferences.isKey("ssid");
+  bool hasPassword = preferences.isKey("password");
+  bool hasDeviceId = preferences.isKey("deviceid");
+  preferences.end();
+  
+  return hasSsid && hasPassword && hasDeviceId;
+}
+
 // Send a message to a target
 void HyperwisorIOT::sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder)
 {
