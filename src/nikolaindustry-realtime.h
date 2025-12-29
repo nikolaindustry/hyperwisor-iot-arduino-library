@@ -2,6 +2,7 @@
 #define NIKOLAINDUSTRY_REALTIME_H
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <functional>
@@ -22,6 +23,7 @@ public:
 private:
   WebSocketsClient webSocket;
   String deviceId;
+  bool _isConnected = false;
 
   std::function<void(JsonObject &)> onMessageCallback;
   std::function<void(bool)> onConnectionStatusChange;
