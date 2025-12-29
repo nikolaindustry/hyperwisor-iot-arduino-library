@@ -43,11 +43,79 @@ void HyperwisorIOT::begin()
 
 unsigned long apStartTime = 0;
 bool apStarted = false;
+bool wasConnected = false;
 
 // Private methods
 void HyperwisorIOT::loop()
 {
-  realtime.loop();
+  // Handle WiFi reconnection and WebSocket management
+  if (WiFi.getMode() == WIFI_STA)
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      // WiFi is connected
+      if (!wasConnected)
+      {
+        // WiFi just reconnected after being disconnected
+        Serial.println("WiFi reconnected. Re-establishing realtime connection...");
+        realtime.begin(deviceid.c_str());
+        setupMessageHandler();
+        wasConnected = true;
+        retryCount = 0;
+      }
+      
+      // Check WebSocket connection status and attempt reconnection if needed
+      if (!realtime.isNikolaindustryRealtimeConnected())
+      {
+        unsigned long currentMillis = millis();
+        if (currentMillis - lastReconnectAttempt >= reconnectInterval)
+        {
+          lastReconnectAttempt = currentMillis;
+          retryCount++;
+          
+          if (retryCount <= maxRetries)
+          {
+            Serial.printf("WebSocket disconnected. Reconnection attempt %d/%d...\n", retryCount, maxRetries);
+            realtime.begin(deviceid.c_str());
+            setupMessageHandler();
+          }
+          else
+          {
+            // Max retries exceeded, reboot the device
+            Serial.println("Max reconnection attempts exceeded. Rebooting...");
+            delay(1000);
+            ESP.restart();
+          }
+        }
+      }
+      else
+      {
+        // WebSocket is connected, reset retry count
+        retryCount = 0;
+      }
+      
+      realtime.loop();
+    }
+    else
+    {
+      // WiFi disconnected
+      if (wasConnected)
+      {
+        Serial.println("WiFi disconnected. Waiting for reconnection...");
+        wasConnected = false;
+      }
+      
+      // Attempt to reconnect WiFi
+      unsigned long currentMillis = millis();
+      if (currentMillis - lastReconnectAttempt >= reconnectInterval)
+      {
+        lastReconnectAttempt = currentMillis;
+        Serial.println("Attempting WiFi reconnection...");
+        WiFi.reconnect();
+      }
+    }
+  }
+  
   taskManager.loop();
 
   if (WiFi.getMode() == WIFI_AP)
@@ -71,8 +139,6 @@ void HyperwisorIOT::loop()
   {
     apStarted = false;
   }
-
-  // Reconnect attempt (same as above)
 }
 
 
@@ -216,6 +282,7 @@ void HyperwisorIOT::getcredentials()
 // Connect to WiFi
 void HyperwisorIOT::connectToWiFi()
 {
+  extern bool wasConnected;
   const char *hostname = "NIKOLAINDUSTRY_Device";
   WiFi.setHostname(hostname);
   WiFi.mode(WIFI_STA);
@@ -235,12 +302,14 @@ void HyperwisorIOT::connectToWiFi()
   if (WiFi.status() == WL_CONNECTED)
   {
     Serial.println("\nWiFi connected: " + WiFi.localIP().toString());
+    wasConnected = true;  // Set initial connection state
     realtime.begin(deviceid.c_str());
     setupMessageHandler();
   }
   else
   {
     Serial.println("\nFailed to connect. Switching to AP Mode.");
+    wasConnected = false;
     startAPMode();
   }
 }
