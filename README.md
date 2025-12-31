@@ -90,15 +90,35 @@ On `hyper.begin()`:
 
 
 ## 📚 Dependencies
-* [`hyperwisor.com`](https://www.hyperwisor.com/)
-* [`WiFi.h`](https://www.arduino.cc/en/Reference/WiFi)
-* [`ArduinoJson`](https://arduinojson.org/)
-* [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime)
-* [`Preferences`](https://www.arduino.cc/en/Reference/Preferences)
-* [`Update`](https://www.arduino.cc/en/Reference/Update)
-* [`DNSServer`](https://github.com/esp8266/Arduino/blob/master/libraries/DNSServer/src/DNSServer.h)
 
-Install all via Arduino Library Manager.
+### Required: Install via Arduino Library Manager
+These libraries must be installed before using Hyperwisor-IOT:
+
+| Library | Author | Install via |
+|---------|--------|-------------|
+| [ArduinoJson](https://arduinojson.org/) | Benoit Blanchon | Library Manager |
+| [WebSockets](https://github.com/Links2004/arduinoWebSockets) | Markus Sattler | Library Manager |
+
+**How to install:**
+1. Open Arduino IDE
+2. Go to **Sketch → Include Library → Manage Libraries...**
+3. Search for `ArduinoJson` and click **Install**
+4. Search for `WebSockets` and click **Install**
+
+### Required: ESP32 Board Package
+This library only works with ESP32. Install the ESP32 board package:
+1. Go to **File → Preferences**
+2. Add this URL to "Additional Board Manager URLs":
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+3. Go to **Tools → Board → Boards Manager...**
+4. Search for `esp32` and install **esp32 by Espressif Systems**
+
+### Built-in (No installation needed)
+These libraries come with the ESP32 board package:
+- WiFi, WebServer, HTTPClient, WiFiClientSecure
+- Preferences, Update, DNSServer, Wire
 
 
 
