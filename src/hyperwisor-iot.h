@@ -71,6 +71,11 @@ public:
   
   // Dialog functions
   void showDialog(const String &targetId, const String &title, const String &description, const String &icon = "info"); // icon options: info (default), warning, success, error, risk
+  void info(const String &targetId, const String &title, const String &description);
+  void warning(const String &targetId, const String &title, const String &description);
+  void success(const String &targetId, const String &title, const String &description);
+  void error(const String &targetId, const String &title, const String &description);
+  void risk(const String &targetId, const String &title, const String &description);
   
   // Flight attitude meter functions
   void updateFlightAttitude(const String &targetId, const String &widgetId, float roll, float pitch);

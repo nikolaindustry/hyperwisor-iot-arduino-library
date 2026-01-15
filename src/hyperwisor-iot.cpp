@@ -612,6 +612,26 @@ void HyperwisorIOT::showDialog(const String &targetId, const String &title, cons
   });
 }
 
+void HyperwisorIOT::info(const String &targetId, const String &title, const String &description) {
+  showDialog(targetId, title, description, "info");
+}
+
+void HyperwisorIOT::warning(const String &targetId, const String &title, const String &description) {
+  showDialog(targetId, title, description, "warning");
+}
+
+void HyperwisorIOT::success(const String &targetId, const String &title, const String &description) {
+  showDialog(targetId, title, description, "success");
+}
+
+void HyperwisorIOT::error(const String &targetId, const String &title, const String &description) {
+  showDialog(targetId, title, description, "error");
+}
+
+void HyperwisorIOT::risk(const String &targetId, const String &title, const String &description) {
+  showDialog(targetId, title, description, "risk");
+}
+
 // Update flight attitude meter widget
 void HyperwisorIOT::updateFlightAttitude(const String &targetId, const String &widgetId, float roll, float pitch) {
   sendTo(targetId, [&](JsonObject &payload) {
