@@ -21,6 +21,20 @@ struct HeatMapPoint {
   int value;
 };
 
+// 3D model update structure
+struct ThreeDModelUpdate {
+  String modelId;
+  float position[3];
+  float rotation[3];
+  float scale[3];
+  String color;
+  float metalness;
+  float roughness;
+  float opacity;
+  bool wireframe;
+  bool visible;
+};
+
 typedef std::function<void(JsonObject &msg)> UserCommandCallback;
 
 class HyperwisorIOT
@@ -91,6 +105,7 @@ public:
   
   // 3D model widget functions
   void update3DModel(const String &targetId, const String &widgetId, const String &modelUrl);
+  void update3DWidget(const String &targetId, const String &widgetId, const std::vector<ThreeDModelUpdate> &models);
 
   // Device status
   void sendDeviceStatus(const String &targetId);

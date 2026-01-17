@@ -687,6 +687,37 @@ void HyperwisorIOT::update3DModel(const String &targetId, const String &widgetId
   });
 }
 
+// Update 3D widget with multiple model transformations
+void HyperwisorIOT::update3DWidget(const String &targetId, const String &widgetId, const std::vector<ThreeDModelUpdate> &models) {
+  sendTo(targetId, [&](JsonObject &payload) {
+    payload["widgetId"] = widgetId;
+    JsonArray valueArray = payload.createNestedArray("value");
+    
+    for (const auto &m : models) {
+      JsonObject modelObj = valueArray.createNestedObject();
+      modelObj["modelId"] = m.modelId;
+      
+      JsonObject updates = modelObj.createNestedObject("updates");
+      
+      JsonArray pos = updates.createNestedArray("position");
+      pos.add(m.position[0]); pos.add(m.position[1]); pos.add(m.position[2]);
+      
+      JsonArray rot = updates.createNestedArray("rotation");
+      rot.add(m.rotation[0]); rot.add(m.rotation[1]); rot.add(m.rotation[2]);
+      
+      JsonArray sca = updates.createNestedArray("scale");
+      sca.add(m.scale[0]); sca.add(m.scale[1]); sca.add(m.scale[2]);
+      
+      updates["color"] = m.color;
+      updates["metalness"] = m.metalness;
+      updates["roughness"] = m.roughness;
+      updates["opacity"] = m.opacity;
+      updates["wireframe"] = m.wireframe;
+      updates["visible"] = m.visible;
+    }
+  });
+}
+
 // Send device status to a target
 void HyperwisorIOT::sendDeviceStatus(const String &targetId) {
   realtime.sendTo(targetId, [](JsonObject &payload) {
