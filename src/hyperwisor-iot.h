@@ -9,7 +9,6 @@
 #include <Update.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
-#include "HyperTaskManager.h"
 #include <ArduinoJson.h>
 #include <time.h>
 #include <sys/time.h>
@@ -139,8 +138,6 @@ public:
   void authenticateUser(const String &email, const String &password);
   DynamicJsonDocument authenticateUserWithResponse(const String &email, const String &password);
 
-  // Task manager
-  HyperTaskManager &getTaskManager();
 
   // JSON utility functions
   JsonObject findCommand(JsonObject& payload, const char* commandName);
@@ -153,7 +150,6 @@ private:
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;
-  HyperTaskManager taskManager;
 
   // Core functions
   void setupMessageHandler();

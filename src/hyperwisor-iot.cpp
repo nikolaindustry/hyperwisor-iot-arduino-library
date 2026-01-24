@@ -25,15 +25,12 @@ void HyperwisorIOT::begin()
   
   // Initialize NTP for time functions
   initNTP();
-  
-  taskManager.begin();
 }
 
 // void HyperwisorIOT::begin()
 // void HyperwisorIOT::loop()
 // {
 //   realtime.loop();
-//   taskManager.loop();
 //   if (WiFi.getMode() == WIFI_AP)
 //   {
 //     dnsServer.processNextRequest();
@@ -115,8 +112,6 @@ void HyperwisorIOT::loop()
       }
     }
   }
-  
-  taskManager.loop();
 
   if (WiFi.getMode() == WIFI_AP)
   {
@@ -1382,12 +1377,6 @@ DynamicJsonDocument HyperwisorIOT::sendSMSWithResponse(const String &productId, 
   
   http.end();
   return responseDoc;
-}
-
-// Get task manager
-HyperTaskManager &HyperwisorIOT::getTaskManager()
-{
-  return taskManager;
 }
 
 // Save GPIO state
