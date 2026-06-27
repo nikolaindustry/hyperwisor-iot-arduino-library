@@ -18,6 +18,8 @@
 - [ThreeDWidgetControl.ino](file://examples/ThreeDWidgetControl/ThreeDWidgetControl.ino)
 - [AttitudeWidget_MPU6050.ino](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino)
 - [i2c_PCF8574_relay.ino](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino)
+- [hydrophonics_controller.ino](file://examples/hydrophonics/hydrophonics_controller.ino)
+- [README.md](file://examples/hydrophonics/README.md)
 </cite>
 
 ## Table of Contents
@@ -33,7 +35,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides a comprehensive, hands-on guide to implementing practical examples with the Hyperwisor-IOT Arduino library for ESP32. It covers foundational setups, command handling, widget updates, and advanced use cases such as smart home switching, sensor logging, 3D visualization, and I2C relay control. Each example includes step-by-step implementation walkthroughs, expected behaviors, integration guidance with sensors/actuators/cloud services, troubleshooting tips, and performance optimization advice.
+This document provides a comprehensive, hands-on guide to implementing practical examples with the Hyperwisor-IOT Arduino library for ESP32. It covers foundational setups, command handling, widget updates, and advanced use cases such as smart home switching, sensor logging, 3D visualization, I2C relay control, and comprehensive hydroponic/aquaponic automation. Each example includes step-by-step implementation walkthroughs, expected behaviors, integration guidance with sensors/actuators/cloud services, troubleshooting tips, and performance optimization advice.
 
 ## Project Structure
 The repository organizes examples by feature area and the core library header/source files. The examples demonstrate:
@@ -43,6 +45,7 @@ The repository organizes examples by feature area and the core library header/so
 - Sensor logging and 3D model control
 - Smart home switching and I2C relay control
 - Attitude visualization using IMU sensors
+- **New**: Comprehensive hydroponic/aquaponic controller with offline automation, NTP-based scheduling, and thermostat control
 
 ```mermaid
 graph TB
@@ -63,6 +66,7 @@ E9["SmartHomeSwitch.ino"]
 E10["ThreeDWidgetControl.ino"]
 E11["AttitudeWidget_MPU6050.ino"]
 E12["i2c_PCF8574_relay.ino"]
+E13["hydrophonics_controller.ino"]
 end
 H --> C
 E1 --> H
@@ -77,27 +81,29 @@ E9 --> H
 E10 --> H
 E11 --> H
 E12 --> H
+E13 --> H
 ```
 
 **Diagram sources**
-- [hyperwisor-iot.h](file://src/hyperwisor-iot.h#L1-L190)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L1-L800)
-- [BasicSetup.ino](file://examples/BasicSetup/BasicSetup.ino#L1-L39)
-- [WiFiProvisioning.ino](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L1-L58)
-- [Manual_Provisioning_Example.ino](file://examples/Manual_Provisioning_Example/Manual_Provisioning_Example.ino#L1-L65)
-- [Conditional_Provisioning_Example.ino](file://examples/Conditional_Provisioning_Example/Conditional_Provisioning_Example.ino#L1-L69)
-- [CommandHandler.ino](file://examples/CommandHandler/CommandHandler.ino#L1-L96)
-- [GPIOControl.ino](file://examples/GPIOControl/GPIOControl.ino#L1-L105)
-- [WidgetUpdate.ino](file://examples/WidgetUpdate/WidgetUpdate.ino#L1-L68)
-- [SensorDataLogger.ino](file://examples/SensorDataLogger/SensorDataLogger.ino#L1-L77)
-- [SmartHomeSwitch.ino](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L1-L328)
-- [ThreeDWidgetControl.ino](file://examples/ThreeDWidgetControl/ThreeDWidgetControl.ino#L1-L85)
-- [AttitudeWidget_MPU6050.ino](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L1-L95)
-- [i2c_PCF8574_relay.ino](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L116)
+- [hyperwisor-iot.h:1-190](file://src/hyperwisor-iot.h#L1-L190)
+- [hyperwisor-iot.cpp:1-800](file://src/hyperwisor-iot.cpp#L1-L800)
+- [BasicSetup.ino:1-39](file://examples/BasicSetup/BasicSetup.ino#L1-L39)
+- [WiFiProvisioning.ino:1-58](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L1-L58)
+- [Manual_Provisioning_Example.ino:1-65](file://examples/Manual_Provisioning_Example/Manual_Provisioning_Example.ino#L1-L65)
+- [Conditional_Provisioning_Example.ino:1-69](file://examples/Conditional_Provisioning_Example/Conditional_Provisioning_Example.ino#L1-L69)
+- [CommandHandler.ino:1-96](file://examples/CommandHandler/CommandHandler.ino#L1-L96)
+- [GPIOControl.ino:1-105](file://examples/GPIOControl/GPIOControl.ino#L1-L105)
+- [WidgetUpdate.ino:1-68](file://examples/WidgetUpdate/WidgetUpdate.ino#L1-L68)
+- [SensorDataLogger.ino:1-77](file://examples/SensorDataLogger/SensorDataLogger.ino#L1-L77)
+- [SmartHomeSwitch.ino:1-328](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L1-L328)
+- [ThreeDWidgetControl.ino:1-85](file://examples/ThreeDWidgetControl/ThreeDWidgetControl.ino#L1-L85)
+- [AttitudeWidget_MPU6050.ino:1-95](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L1-L95)
+- [i2c_PCF8574_relay.ino:1-116](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L116)
+- [hydrophonics_controller.ino:1-665](file://examples/hydrophonics/hydrophonics_controller.ino#L1-L665)
 
 **Section sources**
-- [README.md](file://README.md#L1-L173)
-- [library.properties](file://library.properties#L1-L11)
+- [README.md:1-173](file://README.md#L1-L173)
+- [library.properties:1-11](file://library.properties#L1-L11)
 
 ## Core Components
 This section highlights the core capabilities exposed by the library and how the examples leverage them.
@@ -127,11 +133,11 @@ This section highlights the core capabilities exposed by the library and how the
   - setApiKeys(), insertDatainDatabase()/insertDatainDatabaseWithResponse(), onboardDevice()/onboardDeviceWithResponse(), authenticateUser()/authenticateUserWithResponse(), sendSMS()/sendSMSWithResponse(): integrate with backend services.
 
 **Section sources**
-- [hyperwisor-iot.h](file://src/hyperwisor-iot.h#L39-L187)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L13-L137)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L313-L405)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L521-L714)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L730-L800)
+- [hyperwisor-iot.h:39-187](file://src/hyperwisor-iot.h#L39-L187)
+- [hyperwisor-iot.cpp:13-137](file://src/hyperwisor-iot.cpp#L13-L137)
+- [hyperwisor-iot.cpp:313-405](file://src/hyperwisor-iot.cpp#L313-L405)
+- [hyperwisor-iot.cpp:521-714](file://src/hyperwisor-iot.cpp#L521-L714)
+- [hyperwisor-iot.cpp:730-800](file://src/hyperwisor-iot.cpp#L730-L800)
 
 ## Architecture Overview
 The examples follow a consistent pattern:
@@ -163,10 +169,10 @@ RT-->>Dash : Widget updates / responses
 ```
 
 **Diagram sources**
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L13-L137)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L313-L405)
-- [CommandHandler.ino](file://examples/CommandHandler/CommandHandler.ino#L25-L85)
-- [WidgetUpdate.ino](file://examples/WidgetUpdate/WidgetUpdate.ino#L44-L66)
+- [hyperwisor-iot.cpp:13-137](file://src/hyperwisor-iot.cpp#L13-L137)
+- [hyperwisor-iot.cpp:313-405](file://src/hyperwisor-iot.cpp#L313-L405)
+- [CommandHandler.ino:25-85](file://examples/CommandHandler/CommandHandler.ino#L25-L85)
+- [WidgetUpdate.ino:44-66](file://examples/WidgetUpdate/WidgetUpdate.ino#L44-L66)
 
 ## Detailed Component Analysis
 
@@ -180,13 +186,13 @@ RT-->>Dash : Widget updates / responses
   - On first boot without credentials, device starts AP mode and serves a provisioning page.
   - After successful provisioning, device connects to WiFi and initializes real-time communication.
 - Circuit considerations:
-  - No external components required; relies on ESP32’s integrated radio and flash storage.
+  - No external components required; relies on ESP32's integrated radio and flash storage.
 - Adaptation guidelines:
   - Replace placeholder IDs in later examples with actual target/widget IDs from your dashboard.
 
 **Section sources**
-- [BasicSetup.ino](file://examples/BasicSetup/BasicSetup.ino#L1-L39)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L13-L137)
+- [BasicSetup.ino:1-39](file://examples/BasicSetup/BasicSetup.ino#L1-L39)
+- [hyperwisor-iot.cpp:13-137](file://src/hyperwisor-iot.cpp#L13-L137)
 
 ### WiFi Provisioning Flow
 - Purpose: Demonstrate AP provisioning and credential lifecycle.
@@ -202,8 +208,8 @@ RT-->>Dash : Widget updates / responses
   - Ensure the device can reach the internet post-provisioning for real-time features.
 
 **Section sources**
-- [WiFiProvisioning.ino](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L1-L58)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L141-L185)
+- [WiFiProvisioning.ino:1-58](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L1-L58)
+- [hyperwisor-iot.cpp:141-185](file://src/hyperwisor-iot.cpp#L141-L185)
 
 ### Manual Provisioning
 - Purpose: Pre-configure credentials and optional API keys programmatically.
@@ -216,8 +222,8 @@ RT-->>Dash : Widget updates / responses
   - Useful for factory-fresh or locked-down deployments.
 
 **Section sources**
-- [Manual_Provisioning_Example.ino](file://examples/Manual_Provisioning_Example/Manual_Provisioning_Example.ino#L1-L65)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L432-L518)
+- [Manual_Provisioning_Example.ino:1-65](file://examples/Manual_Provisioning_Example/Manual_Provisioning_Example.ino#L1-L65)
+- [hyperwisor-iot.cpp:432-518](file://src/hyperwisor-iot.cpp#L432-L518)
 
 ### Conditional Provisioning
 - Purpose: Combine manual and automatic provisioning for flexible deployments.
@@ -229,7 +235,7 @@ RT-->>Dash : Widget updates / responses
   - Provides a graceful fallback strategy for diverse deployment scenarios.
 
 **Section sources**
-- [Conditional_Provisioning_Example.ino](file://examples/Conditional_Provisioning_Example/Conditional_Provisioning_Example.ino#L1-L69)
+- [Conditional_Provisioning_Example.ino:1-69](file://examples/Conditional_Provisioning_Example/Conditional_Provisioning_Example.ino#L1-L69)
 
 ### CommandHandler for Custom Command Processing
 - Purpose: Receive and process custom commands from the dashboard/app.
@@ -254,19 +260,19 @@ Lib-->>Dash : Response payload
 ```
 
 **Diagram sources**
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L313-L405)
-- [CommandHandler.ino](file://examples/CommandHandler/CommandHandler.ino#L25-L85)
+- [hyperwisor-iot.cpp:313-405](file://src/hyperwisor-iot.cpp#L313-L405)
+- [CommandHandler.ino:25-85](file://examples/CommandHandler/CommandHandler.ino#L25-L85)
 
 **Section sources**
-- [CommandHandler.ino](file://examples/CommandHandler/CommandHandler.ino#L1-L96)
-- [hyperwisor-iot.h](file://src/hyperwisor-iot.h#L142-L146)
+- [CommandHandler.ino:1-96](file://examples/CommandHandler/CommandHandler.ino#L1-L96)
+- [hyperwisor-iot.h:142-146](file://src/hyperwisor-iot.h#L142-L146)
 
 ### WidgetUpdate Demonstrations
 - Purpose: Update dashboard widgets with various data types.
 - Steps:
   1. In loop(), periodically compute or simulate values.
   2. Call updateWidget(targetId, widgetId, value) with:
-     - String values (e.g., “XX.X%”)
+     - String values (e.g., "XX.X%")
      - Numeric values (float/int)
      - Array values (for charts/graphs)
 - Expected behavior:
@@ -275,8 +281,8 @@ Lib-->>Dash : Response payload
   - Use a fixed update interval to balance responsiveness and bandwidth.
 
 **Section sources**
-- [WidgetUpdate.ino](file://examples/WidgetUpdate/WidgetUpdate.ino#L1-L68)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L551-L598)
+- [WidgetUpdate.ino:1-68](file://examples/WidgetUpdate/WidgetUpdate.ino#L1-L68)
+- [hyperwisor-iot.cpp:551-598](file://src/hyperwisor-iot.cpp#L551-L598)
 
 ### SmartHomeSwitch for Complex Hardware Control
 - Purpose: Bidirectional control of relays with offline persistence and online synchronization.
@@ -311,11 +317,11 @@ Skip --> LoopBack
 ```
 
 **Diagram sources**
-- [SmartHomeSwitch.ino](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L241-L327)
+- [SmartHomeSwitch.ino:241-327](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L241-L327)
 
 **Section sources**
-- [SmartHomeSwitch.ino](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L1-L328)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L64-L137)
+- [SmartHomeSwitch.ino:1-328](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L1-L328)
+- [hyperwisor-iot.cpp:64-137](file://src/hyperwisor-iot.cpp#L64-L137)
 
 ### SensorDataLogger for Sensor Integration
 - Purpose: Periodically log sensor readings to the platform for visualization.
@@ -328,8 +334,8 @@ Skip --> LoopBack
   - Use realistic sensor drivers (e.g., I2C/Temperature/Humidity) and calibrate values.
 
 **Section sources**
-- [SensorDataLogger.ino](file://examples/SensorDataLogger/SensorDataLogger.ino#L1-L77)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L535-L549)
+- [SensorDataLogger.ino:1-77](file://examples/SensorDataLogger/SensorDataLogger.ino#L1-L77)
+- [hyperwisor-iot.cpp:535-549](file://src/hyperwisor-iot.cpp#L535-L549)
 
 ### ThreeDWidgetControl for 3D Visualization
 - Purpose: Control multiple 3D models within a 3D Widget (position, rotation, scale, material).
@@ -343,9 +349,9 @@ Skip --> LoopBack
   - Use small update intervals to keep motion smooth; throttle when off Wi-Fi.
 
 **Section sources**
-- [ThreeDWidgetControl.ino](file://examples/ThreeDWidgetControl/ThreeDWidgetControl.ino#L1-L85)
-- [hyperwisor-iot.h](file://src/hyperwisor-iot.h#L24-L35)
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L686-L714)
+- [ThreeDWidgetControl.ino:1-85](file://examples/ThreeDWidgetControl/ThreeDWidgetControl.ino#L1-L85)
+- [hyperwisor-iot.h:24-35](file://src/hyperwisor-iot.h#L24-L35)
+- [hyperwisor-iot.cpp:686-714](file://src/hyperwisor-iot.cpp#L686-L714)
 
 ### AttitudeWidgetControl with MPU6050
 - Purpose: Drive a Flight Attitude Widget using accelerometer/gyroscope data.
@@ -359,7 +365,7 @@ Skip --> LoopBack
   - Calibrate sensor offsets and filter noise for stable readings.
 
 **Section sources**
-- [AttitudeWidget_MPU6050.ino](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L1-L95)
+- [AttitudeWidget_MPU6050.ino:1-95](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L1-L95)
 
 ### I2C Relay Control Implementation (PCF8574)
 - Purpose: Control I2C expanders (e.g., PCF8574) via real-time commands.
@@ -374,7 +380,71 @@ Skip --> LoopBack
   - Ensure correct I2C pull-ups and address selection; verify expander wiring.
 
 **Section sources**
-- [i2c_PCF8574_relay.ino](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L116)
+- [i2c_PCF8574_relay.ino:1-116](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L116)
+
+### Hydrophonics Controller - Comprehensive Automation System
+- Purpose: **NEW** Production-ready controller for hydroponic/aquaponic systems with offline automation, NTP-based scheduling, and thermostat control.
+- Key Features:
+  - **Offline Operation**: Complete automation runs locally on ESP32 without cloud connectivity
+  - **NTP-Based Scheduling**: Time-of-day scheduling using network time synchronization
+  - **Looping Timers**: Repeating ON/OFF cycles for pumps, aerators, and misting systems
+  - **Local Thermostat Control**: Temperature-based relay control using DS18B20 sensors
+  - **Persistent Memory**: All settings saved to NVS flash storage
+  - **Priority System**: Manual commands override all automations
+  - **Boot-Time Enforcement**: Handles schedules that were active during power loss
+- Hardware Requirements:
+  - ESP32 Development Board (any variant with WiFi)
+  - 8-Channel Relay Module (active-low or active-high supported)
+  - DS18B20 Temperature Sensors (optional, up to 8 sensors)
+  - 4.7kΩ Resistor (for DS18B20 data line pull-up)
+- Architecture:
+  - **Schedules** (NTP Time) → **Timers** (millis()) → **Thermostat** (DS18B20) → **Relay Control** (8 Channels)
+  - **NVS Persistent Memory** stores widget IDs, timer settings, and schedules
+- Steps:
+  1. Initialize NVS storage and load persistent settings
+  2. Set up 8 relays with configurable pin mapping and polarity
+  3. Initialize DS18B20 temperature sensors with automatic resolution
+  4. Register user command handler for cloud-based configuration
+  5. Implement priority-based automation evaluation
+  6. Run continuous loops for timers, schedules, and temperature monitoring
+- Expected Behavior:
+  - All automations persist across power cycles
+  - Schedules continue running during WiFi outages
+  - Manual cloud commands instantly override all local automations
+  - Temperature monitoring prevents equipment damage
+- Integration Tips:
+  - Use appropriate hysteresis (0.5-2.0°C) to prevent rapid cycling
+  - Monitor NVS wear - avoid excessive config saves (>10k writes)
+  - Implement watchdog timers for critical applications
+  - Add manual override buttons in cloud UI
+
+```mermaid
+flowchart TD
+Start(["Boot/Power Loss"]) --> LoadNVS["Load NVS Settings"]
+LoadNVS --> InitHW["Initialize Relays & Sensors"]
+InitHW --> RegisterHandler["Register Cloud Handler"]
+RegisterHandler --> Priority{"Manual Command?"}
+Priority --> |Yes| DisableAuto["Disable All Automations"] --> ApplyManual["Apply Manual Control"]
+Priority --> |No| CheckSchedules["Check Time Schedules"]
+CheckSchedules --> InWindow{"In Scheduled Window?"}
+InWindow --> |Yes| ApplySchedule["Apply Schedule Mode<br/>RELAY_ON/OFF/THERMOSTAT/TIMER"]
+InWindow --> |No| DisableSched["Disable Schedule Mode"]
+DisableSched --> CheckThermo["Check Thermostat Logic"]
+ApplySchedule --> CheckThermo
+CheckThermo --> EvalTimers["Evaluate Looping Timers"]
+EvalTimers --> UpdateWidgets["Update Dashboard Widgets"]
+UpdateWidgets --> LoopBack["Main Loop"]
+ApplyManual --> LoopBack
+```
+
+**Diagram sources**
+- [hydrophonics_controller.ino:331-411](file://examples/hydrophonics/hydrophonics_controller.ino#L331-L411)
+- [hydrophonics_controller.ino:221-278](file://examples/hydrophonics/hydrophonics_controller.ino#L221-L278)
+- [hydrophonics_controller.ino:280-328](file://examples/hydrophonics/hydrophonics_controller.ino#L280-L328)
+
+**Section sources**
+- [hydrophonics_controller.ino:1-665](file://examples/hydrophonics/hydrophonics_controller.ino#L1-L665)
+- [README.md:1-419](file://examples/hydrophonics/README.md#L1-L419)
 
 ## Dependency Analysis
 - Library dependencies:
@@ -385,6 +455,7 @@ Skip --> LoopBack
   - SmartHomeSwitch: Preferences for GPIO state persistence.
   - AttitudeWidget_MPU6050: Adafruit MPU6050 and Adafruit Sensor libraries.
   - i2c_PCF8574_relay: PCF8574 library and Wire.
+  - **New**: hydrophonics: OneWire, DallasTemperature, Preferences, time.h libraries.
 
 ```mermaid
 graph LR
@@ -394,16 +465,21 @@ L --> ESP["ESP32 Built-ins"]
 SH["SmartHomeSwitch.ino"] --> PREF["Preferences"]
 MPU["AttitudeWidget_MPU6050.ino"] --> AF_MPU["Adafruit MPU6050"]
 I2C["i2c_PCF8574_relay.ino"] --> PCF["PCF8574"]
+HYDRO["hydrophonics_controller.ino"] --> OW["OneWire"]
+HYDRO --> DT["DallasTemperature"]
+HYDRO --> PREF["Preferences"]
+HYDRO --> TIME["time.h"]
 ```
 
 **Diagram sources**
-- [library.properties](file://library.properties#L10-L11)
-- [SmartHomeSwitch.ino](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L20-L24)
-- [AttitudeWidget_MPU6050.ino](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L13-L17)
-- [i2c_PCF8574_relay.ino](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L6)
+- [library.properties:10-11](file://library.properties#L10-L11)
+- [SmartHomeSwitch.ino:20-24](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L20-L24)
+- [AttitudeWidget_MPU6050.ino:13-17](file://examples/AttitudeWidget_MPU6050/AttitudeWidget_MPU6050.ino#L13-L17)
+- [i2c_PCF8574_relay.ino:1-6](file://examples/i2c_PCF8574_relay/i2c_PCF8574_relay.ino#L1-L6)
+- [hydrophonics_controller.ino:8-11](file://examples/hydrophonics/hydrophonics_controller.ino#L8-L11)
 
 **Section sources**
-- [library.properties](file://library.properties#L10-L11)
+- [library.properties:10-11](file://library.properties#L10-L11)
 
 ## Performance Considerations
 - Keep loop() lightweight:
@@ -417,8 +493,11 @@ I2C["i2c_PCF8574_relay.ino"] --> PCF["PCF8574"]
   - Use appropriate pull-up resistors and bus speeds; debounce mechanical switches.
 - OTA and provisioning:
   - Limit OTA triggers to necessary updates; ensure stable Wi-Fi during transfers.
-
-[No sources needed since this section provides general guidance]
+- **New**: Hydrophonics Controller optimizations:
+  - Use non-blocking sensor reads with requestTemperatures() and waitForConversion(false)
+  - Implement efficient NVS storage with selective updates
+  - Use appropriate intervals: STATUS_UPDATE_INTERVAL (2s), TEMP_UPDATE_INTERVAL (5s), SCHEDULE_CHECK_INTERVAL (10s)
+  - Implement boot-time schedule enforcement to prevent "ghost states"
 
 ## Troubleshooting Guide
 - Device stuck in AP mode:
@@ -439,25 +518,37 @@ I2C["i2c_PCF8574_relay.ino"] --> PCF["PCF8574"]
 - I2C relay not responding:
   - Cause: Wrong I2C address, missing pull-ups, or incorrect pin modes.
   - Resolution: Verify expander address and wiring; confirm pin directions and logic levels.
+- **New**: Hydrophonics Controller issues:
+  - Schedules not executing at correct times: Verify NTP time sync is working and timezone is set correctly.
+  - Timer not cycling: Check timer activation state and ensure onTimeMs/offTimeMs are set correctly.
+  - Thermostat not responding: Verify DS18B20 sensor detection and correct sensorIndex mapping.
+  - Manual override not working: Ensure cloud commands properly disable all automations.
+  - NVS storage corruption: Check for excessive writes and consider implementing write batching.
 
 **Section sources**
-- [hyperwisor-iot.cpp](file://src/hyperwisor-iot.cpp#L46-L137)
-- [WiFiProvisioning.ino](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L27-L52)
-- [SmartHomeSwitch.ino](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L118-L149)
+- [hyperwisor-iot.cpp:46-137](file://src/hyperwisor-iot.cpp#L46-L137)
+- [WiFiProvisioning.ino:27-52](file://examples/WiFiProvisioning/WiFiProvisioning.ino#L27-L52)
+- [SmartHomeSwitch.ino:118-149](file://examples/SmartHomeSwitch/SmartHomeSwitch.ino#L118-L149)
+- [hydrophonics_controller.ino:348-411](file://examples/hydrophonics/hydrophonics_controller.ino#L348-L411)
 
 ## Conclusion
-The Hyperwisor-IOT library simplifies ESP32 IoT development by handling provisioning, real-time communication, and dashboard integrations out of the box. These examples demonstrate how to progressively build from basic connectivity to advanced hardware control, sensor logging, and 3D visualization. By following the step-by-step guides, applying the troubleshooting tips, and optimizing for performance, you can adapt these patterns to a wide range of applications and integrate seamlessly with third-party sensors, actuators, and cloud services.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The Hyperwisor-IOT library simplifies ESP32 IoT development by handling provisioning, real-time communication, and dashboard integrations out of the box. These examples demonstrate how to progressively build from basic connectivity to advanced hardware control, sensor logging, 3D visualization, and comprehensive automation systems. The new hydroponic/aquaponic controller showcases production-ready offline automation with NTP-based scheduling, demonstrating how to create robust, fail-safe systems that operate independently of cloud connectivity while maintaining seamless integration with Hyperwisor's dashboard platform. By following the step-by-step guides, applying the troubleshooting tips, and optimizing for performance, you can adapt these patterns to a wide range of applications including agriculture, aquaculture, industrial control, and environmental monitoring.
 
 ## Appendices
 
 ### Integration Patterns with Third-Party Sensors, Actuators, and Cloud Services
 - Sensors:
   - Use established libraries (e.g., Adafruit sensor suites) and feed values into updateWidget() or send_Sensor_Data_logger().
+  - **New**: DS18B20 sensors with OneWire protocol for precise temperature monitoring in hydroponic systems.
 - Actuators:
   - Relay modules, motor drivers, and solenoids can be controlled via GPIO or I2C expanders; persist states and synchronize with dashboard widgets.
+  - **New**: 8-channel relay modules for comprehensive hydroponic/aquaponic control.
 - Cloud services:
   - Use setApiKeys() and database/cloud APIs to store and retrieve data; authenticate users and onboard devices as needed.
+  - **New**: NTP time synchronization enables precise scheduling without external RTC modules.
 
-[No sources needed since this section provides general guidance]
+### Advanced Automation Patterns
+- **Priority-Based Control**: Manual cloud commands override all local automations for safety and emergency situations.
+- **Boot-Time Enforcement**: System checks current time against schedules on startup to prevent "ghost states" where relays should have been ON but weren't.
+- **Non-Blocking Operations**: Efficient use of millis() timing prevents blocking operations while maintaining responsive control.
+- **Persistent State Management**: NVS storage ensures settings survive power cycles and WiFi outages.

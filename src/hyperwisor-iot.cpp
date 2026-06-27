@@ -41,6 +41,7 @@ void HyperwisorIOT::begin()
 unsigned long apStartTime = 0;
 bool apStarted = false;
 bool wasConnected = false;
+unsigned long wifiDownSince = 0;  // millis() timestamp of when WiFi went down (0 = up)
 
 // Private methods
 void HyperwisorIOT::loop()
@@ -50,65 +51,66 @@ void HyperwisorIOT::loop()
   {
     if (WiFi.status() == WL_CONNECTED)
     {
-      // WiFi is connected
+      // WiFi is healthy — clear the WiFi-down watchdog
+      wifiDownSince = 0;
+
       if (!wasConnected)
       {
-        // WiFi just reconnected after being disconnected
+        // WiFi just (re)connected. Start ONE fresh WebSocket session and re-sync
+        // the clock now that we have internet again.
         Serial.println("WiFi reconnected. Re-establishing realtime connection...");
         realtime.begin(deviceid.c_str());
         setupMessageHandler();
+        resyncTimeNonBlocking();
         wasConnected = true;
         retryCount = 0;
       }
-      
-      // Check WebSocket connection status and attempt reconnection if needed
+
+      // IMPORTANT: do NOT call realtime.begin()/beginSSL() repeatedly here.
+      // The WebSocket client already auto-reconnects (setReconnectInterval), and
+      // re-opening SSL sessions stacks half-open connections that leak sockets and
+      // crash the board. A cloud-only outage must NEVER reboot the device — the
+      // local automations (timers, thermostats, schedules) are meant to run offline.
       if (!realtime.isNikolaindustryRealtimeConnected())
       {
         unsigned long currentMillis = millis();
         if (currentMillis - lastReconnectAttempt >= reconnectInterval)
         {
           lastReconnectAttempt = currentMillis;
-          retryCount++;
-          
-          if (retryCount <= maxRetries)
-          {
-            Serial.printf("WebSocket disconnected. Reconnection attempt %d/%d...\n", retryCount, maxRetries);
-            realtime.begin(deviceid.c_str());
-            setupMessageHandler();
-          }
-          else
-          {
-            // Max retries exceeded, reboot the device
-            Serial.println("Max reconnection attempts exceeded. Rebooting...");
-            delay(1000);
-            ESP.restart();
-          }
+          Serial.println("WebSocket offline. Running locally; auto-reconnect in progress...");
         }
       }
-      else
-      {
-        // WebSocket is connected, reset retry count
-        retryCount = 0;
-      }
-      
-      realtime.loop();
+
+      realtime.loop();  // pumps messages AND drives the WebSocket auto-reconnect
     }
     else
     {
       // WiFi disconnected
+      unsigned long currentMillis = millis();
+
       if (wasConnected)
       {
         Serial.println("WiFi disconnected. Waiting for reconnection...");
         wasConnected = false;
       }
-      
-      // Attempt to reconnect WiFi
-      unsigned long currentMillis = millis();
+      if (wifiDownSince == 0)
+        wifiDownSince = currentMillis;  // start the WiFi-down watchdog
+
+      // Attempt to reconnect WiFi periodically (non-blocking)
       if (currentMillis - lastReconnectAttempt >= reconnectInterval)
       {
         lastReconnectAttempt = currentMillis;
         Serial.println("Attempting WiFi reconnection...");
         WiFi.reconnect();
+      }
+
+      // Last-resort watchdog: reboot ONLY if WiFi itself has been wedged for a long
+      // time (a genuine stuck-stack case). A WebSocket-only outage never gets here.
+      if (currentMillis - wifiDownSince >= wifiRebootTimeout)
+      {
+        Serial.println("WiFi unreachable for too long. Rebooting as last resort...");
+        delay(1000);
+        ESP.restart();
       }
     }
   }
@@ -1613,29 +1615,35 @@ DynamicJsonDocument HyperwisorIOT::authenticateUserWithResponse(const String &em
   return responseDoc;
 }
 
+// Re-configure SNTP without blocking. Safe to call repeatedly (e.g. on every WiFi
+// reconnect) so the clock recovers after an outage instead of staying stuck at 1970.
+void HyperwisorIOT::resyncTimeNonBlocking() {
+  // Parse timezone to get offset values
+  long gmtOffset = 0;
+  int daylightOffset = 0;
+
+  // Simple parsing for common timezone formats
+  if (timezone.startsWith("IST")) {
+    gmtOffset = 5 * 3600 + 30 * 60;  // UTC+5:30
+  } else if (timezone.startsWith("EST")) {
+    gmtOffset = -5 * 3600;  // UTC-5
+  } else if (timezone.startsWith("PST")) {
+    gmtOffset = -8 * 3600;  // UTC-8
+  } else if (timezone.startsWith("UTC")) {
+    gmtOffset = 0;  // UTC
+  }
+
+  // Configure NTP servers with timezone offsets. SNTP then keeps re-syncing in the
+  // background on its own as long as the device stays running.
+  configTime(gmtOffset, daylightOffset, "pool.ntp.org", "time.nist.gov");
+}
+
 // Time and date functions using NTP
 void HyperwisorIOT::initNTP() {
   if (!ntpInitialized) {
-    // Configure NTP only once with timezone support
-    // Parse timezone to get offset values
-    long gmtOffset = 0;
-    int daylightOffset = 0;
-    
-    // Simple parsing for common timezone formats
-    if (timezone.startsWith("IST")) {
-      gmtOffset = 5 * 3600 + 30 * 60;  // UTC+5:30
-    } else if (timezone.startsWith("EST")) {
-      gmtOffset = -5 * 3600;  // UTC-5
-    } else if (timezone.startsWith("PST")) {
-      gmtOffset = -8 * 3600;  // UTC-8
-    } else if (timezone.startsWith("UTC")) {
-      gmtOffset = 0;  // UTC
-    }
-    
-    // Configure NTP servers with timezone offsets
-    configTime(gmtOffset, daylightOffset, "pool.ntp.org", "time.nist.gov");
+    resyncTimeNonBlocking();
     ntpInitialized = true;
-    
+
     // Wait for time to be synchronized (but don't block forever)
     time_t now = time(nullptr);
     int retry = 0;
@@ -1644,7 +1652,7 @@ void HyperwisorIOT::initNTP() {
       now = time(nullptr);
       retry++;
     }
-    
+
     if (now < 1000000000L) {
       Serial.println("Warning: Failed to synchronize with NTP server immediately, will try again when needed.");
     } else {

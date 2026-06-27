@@ -689,6 +689,7 @@ private:
   void connectToWiFi();
   String getSuccessHtml();
   String getErrorHtml(String errorMessage);
+  void resyncTimeNonBlocking();  // Re-configure SNTP without blocking the loop
 
 
 
@@ -709,6 +710,9 @@ private:
   const unsigned long reconnectInterval = 10000;
   int retryCount = 0;
   const int maxRetries = 6;
+  // Last-resort watchdog: reboot ONLY if WiFi itself stays down this long.
+  // A WebSocket/cloud-only outage never triggers a reboot.
+  const unsigned long wifiRebootTimeout = 300000;  // 5 minutes
   
   // NTP
   bool ntpInitialized = false;

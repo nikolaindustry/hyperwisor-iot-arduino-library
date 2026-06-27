@@ -1,496 +1,710 @@
 /**
- * IoT Relay Controller with Temperature Monitoring - Hyperwisor IoT
- * 
- * A simple IoT-based relay controller using Hyperwisor cloud platform.
- * Control up to 8 relays remotely via Hyperwisor dashboard with temperature monitoring.
- * 
- * Features:
- * - Pure IoT cloud control - no automatic temperature control
- * - Real-time relay control via Hyperwisor dashboard
- * - Temperature monitoring and data logging
- * - Individual relay state feedback
- * - Active-LOW relay support (common relay modules)
- * - No schedules, no rules - manual cloud control only
- * 
- * Hardware:
- * - ESP32 board
- * - 8-channel relay module (active-LOW or active-HIGH)
- * - DS18B20 temperature sensors (optional, for monitoring)
- * - Connect relay pins to GPIOs defined below
- * - Connect DS18B20 sensors to ONE_WIRE_PIN with 4.7kΩ pull-up resistor
- * 
- * Usage:
- * - Upload code and power on ESP32
- * - Device connects to Hyperwisor cloud automatically
- * - Control relays from Hyperwisor dashboard widgets
- * - Monitor relay states and temperature in real-time
- * - Temperature data logged to dashboard for historical tracking
+ * Universal IoT Relay & Temperature Controller (Production Ready)
+ * Features: Non-Blocking Sensors, Asymmetrical Hysteresis, NVS Persistent Memory,
+ * Local Thermostat, Looping Timers, Time-of-Day Scheduler, and Full Debugging.
  */
 
 #include <hyperwisor-iot.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <Preferences.h>
+#include <time.h>
 
 // ============== CONFIGURATION ==============
-
-// One-Wire pin for DS18B20 temperature sensors (optional)
 #define ONE_WIRE_PIN 2
-
-String apikey = "";
-String secretkey = "";
-String productId = "";
-String deviceId = "";
-String userId = "";
-String msgfrom = "";
-
-// Relay configuration
 const int NUM_RELAYS = 8;
-const int RELAY_PINS[] = {32, 33, 25, 26, 27, 4, 16, 17};  // 8 relay channels
+const int RELAY_PINS[] = {32, 33, 25, 26, 27, 4, 16, 17};
+const bool ACTIVE_LOW_RELAYS = true;
 
-// Active-LOW relay configuration (relay turns ON when GPIO is LOW)
-// Most common relay modules are active-LOW
-const bool ACTIVE_LOW_RELAYS = true;  // Set to false for active-high relays
+String TARGET_ID = "";
+String DATA_LOGGER_ID = "";
 
-// Dashboard and Widget IDs - Replace with your actual IDs
-String TARGET_ID = "your-dashboard-id";  // Your Hyperwisor dashboard ID
-String CONFIG_ID = "your-config-id";     // Data logger config ID (for send_Sensor_Data_logger)
+// Dynamic Caches
+String RELAY_WIDGET_IDS[NUM_RELAYS] = {"", "", "", "", "", "", "", ""};
+String TEMP_WIDGET_IDS[8] = {"", "", "", "", "", "", "", ""};
+String currentConfigId = "";
+const char* SENSOR_NAMES[] = {"Sensor_1", "Sensor_2", "Sensor_3", "Sensor_4", "Sensor_5", "Sensor_6", "Sensor_7", "Sensor_8"};
 
-// Relay control widgets (all 8 relays)
-String RELAY_WIDGET_IDS[] = {
-  "widget-relay-1", "widget-relay-2", "widget-relay-3", "widget-relay-4",
-  "widget-relay-5", "widget-relay-6", "widget-relay-7", "widget-relay-8"
+// 1. Local Thermostat Structure (Upgraded for Asymmetrical)
+struct TempController {
+  bool active = false;
+  int sensorIndex = -1;
+  float targetTemp = 25.0;
+  float hysteresisHigh = 1.0;
+  float hysteresisLow = 1.0;
+  bool modeHeating = true;
 };
+TempController thermostats[NUM_RELAYS];
 
-// Temperature sensor widgets (for data logging and display)
-String TEMP_WIDGET_IDS[] = {
-  "widget-temp-1", "widget-temp-2", "widget-temp-3", "widget-temp-4",
-  "widget-temp-5", "widget-temp-6", "widget-temp-7", "widget-temp-8"
+// 2. Looping Timer Structure
+struct LoopTimer {
+  bool active = false;
+  uint32_t onTimeMs = 120000;
+  uint32_t offTimeMs = 600000;
+  unsigned long lastToggleTime = 0;
+  bool currentPhaseOn = false;
 };
+LoopTimer timers[NUM_RELAYS];
 
-// Update intervals
-const unsigned long STATUS_UPDATE_INTERVAL = 2000;  // Send status every 2 seconds
-const unsigned long TEMP_UPDATE_INTERVAL = 5000;    // Send temperature every 5 seconds
+// 3. Time-of-Day Schedule Structure (Upgraded for Asymmetrical)
+struct DailySchedule {
+  bool active = false;
+  uint8_t startHour = 0;
+  uint8_t startMin = 0;
+  uint8_t endHour = 0;
+  uint8_t endMin = 0;
+
+  String mode = "RELAY_ON";
+
+  float targetTemp = 25.0;
+  float hysteresisHigh = 1.0;
+  float hysteresisLow = 1.0;
+  bool modeHeating = true;
+  uint32_t onTimeMs = 120000;
+  uint32_t offTimeMs = 600000;
+
+  bool isExecuting = false;
+};
+DailySchedule schedules[NUM_RELAYS];
+
+// Timers
+const unsigned long STATUS_UPDATE_INTERVAL = 2000;
+const unsigned long TEMP_UPDATE_INTERVAL = 5000;
+const unsigned long SCHEDULE_CHECK_INTERVAL = 10000;
 
 // ============== GLOBAL VARIABLES ==============
-
 HyperwisorIOT device;
-
-// Temperature sensor setup
 OneWire oneWire(ONE_WIRE_PIN);
 DallasTemperature sensors(&oneWire);
+Preferences nvsStorage;
 uint8_t sensorCount = 0;
 
-// State tracking
 unsigned long lastStatusUpdate = 0;
-unsigned long lastTempUpdate = 0;
-bool relayStates[NUM_RELAYS] = {false, false, false, false, false, false, false, false};
-bool lastRelayStates[NUM_RELAYS] = {false, false, false, false, false, false, false, false};
+unsigned long lastTempRequest = 0;
+unsigned long lastTimerCheck = 0;
+unsigned long lastScheduleCheck = 0;
+bool tempConversionPending = false;
 
-// ============== HELPER FUNCTIONS ==============
+bool relayStates[NUM_RELAYS] = {false};
+bool lastRelayStates[NUM_RELAYS] = {false};
 
-/**
- * Initialize relay pins
- */
+// ============== NVS MEMORY FUNCTIONS ==============
+
+void loadPersistentData() {
+  Serial.println("Loading persistent settings from NVS...");
+  nvsStorage.begin("iot_config", true);
+  currentConfigId = nvsStorage.getString("configId", "");
+
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    RELAY_WIDGET_IDS[i] = nvsStorage.getString(("rw_" + String(i)).c_str(), "");
+    TEMP_WIDGET_IDS[i] = nvsStorage.getString(("tw_" + String(i)).c_str(), "");
+
+    // Restore last known relay state so a reboot/OTA doesn't glitch the relays OFF
+    relayStates[i] = nvsStorage.getBool(("rs_" + String(i)).c_str(), false);
+    lastRelayStates[i] = relayStates[i];
+
+    thermostats[i].active = nvsStorage.getBool(("tcA_" + String(i)).c_str(), false);
+    thermostats[i].sensorIndex = nvsStorage.getInt(("tcS_" + String(i)).c_str(), -1);
+    thermostats[i].targetTemp = nvsStorage.getFloat(("tcT_" + String(i)).c_str(), 25.0);
+    thermostats[i].hysteresisHigh = nvsStorage.getFloat(("tcHh_" + String(i)).c_str(), 1.0);
+    thermostats[i].hysteresisLow = nvsStorage.getFloat(("tcHl_" + String(i)).c_str(), 1.0);
+    thermostats[i].modeHeating = nvsStorage.getBool(("tcM_" + String(i)).c_str(), true);
+
+    timers[i].active = nvsStorage.getBool(("tmA_" + String(i)).c_str(), false);
+    timers[i].onTimeMs = nvsStorage.getUInt(("tmOn_" + String(i)).c_str(), 120000);
+    timers[i].offTimeMs = nvsStorage.getUInt(("tmOff_" + String(i)).c_str(), 600000);
+
+    schedules[i].active = nvsStorage.getBool(("scA_" + String(i)).c_str(), false);
+    schedules[i].startHour = nvsStorage.getUChar(("scSH_" + String(i)).c_str(), 0);
+    schedules[i].startMin = nvsStorage.getUChar(("scSM_" + String(i)).c_str(), 0);
+    schedules[i].endHour = nvsStorage.getUChar(("scEH_" + String(i)).c_str(), 0);
+    schedules[i].endMin = nvsStorage.getUChar(("scEM_" + String(i)).c_str(), 0);
+    schedules[i].mode = nvsStorage.getString(("scMd_" + String(i)).c_str(), "RELAY_ON");
+    schedules[i].targetTemp = nvsStorage.getFloat(("scTT_" + String(i)).c_str(), 25.0);
+    schedules[i].hysteresisHigh = nvsStorage.getFloat(("scHh_" + String(i)).c_str(), 1.0);
+    schedules[i].hysteresisLow = nvsStorage.getFloat(("scHl_" + String(i)).c_str(), 1.0);
+    schedules[i].modeHeating = nvsStorage.getBool(("scMH_" + String(i)).c_str(), true);
+    schedules[i].onTimeMs = nvsStorage.getUInt(("scTO_" + String(i)).c_str(), 120000);
+    schedules[i].offTimeMs = nvsStorage.getUInt(("scTF_" + String(i)).c_str(), 600000);
+  }
+  nvsStorage.end();
+  Serial.println("NVS Load Complete.\n");
+}
+
+void saveRelayWidgetId(int index, String newId) {
+  if (RELAY_WIDGET_IDS[index] != newId) {
+    RELAY_WIDGET_IDS[index] = newId;
+    nvsStorage.begin("iot_config", false);
+    nvsStorage.putString(("rw_" + String(index)).c_str(), newId);
+    nvsStorage.end();
+  }
+}
+
+void saveTempWidgetId(int index, String newId) {
+  if (TEMP_WIDGET_IDS[index] != newId) {
+    TEMP_WIDGET_IDS[index] = newId;
+    nvsStorage.begin("iot_config", false);
+    nvsStorage.putString(("tw_" + String(index)).c_str(), newId);
+    nvsStorage.end();
+  }
+}
+
+void saveConfigId(String newId) {
+  if (currentConfigId != newId) {
+    currentConfigId = newId;
+    nvsStorage.begin("iot_config", false);
+    nvsStorage.putString("configId", newId);
+    nvsStorage.end();
+  }
+}
+
+// ============== CORE FUNCTIONS ==============
+
 void initRelays() {
-  Serial.println("\n=== Initializing Relays ===");
-  
+  // Drive each pin to its restored state (loaded in loadPersistentData) instead of
+  // forcing everything OFF — this is what stops the on/off glitch across a reboot.
   for (int i = 0; i < NUM_RELAYS; i++) {
     pinMode(RELAY_PINS[i], OUTPUT);
-    // Start with relays OFF (HIGH for active-low, LOW for active-high)
-    digitalWrite(RELAY_PINS[i], ACTIVE_LOW_RELAYS ? HIGH : LOW);
-    relayStates[i] = false;
-    lastRelayStates[i] = false;
-    
-    Serial.print("Relay ");
-    Serial.print(i + 1);
-    Serial.print(" on GPIO ");
-    Serial.print(RELAY_PINS[i]);
-    Serial.println(ACTIVE_LOW_RELAYS ? " (Active-LOW)" : " (Active-HIGH)");
+    if (ACTIVE_LOW_RELAYS) digitalWrite(RELAY_PINS[i], relayStates[i] ? LOW : HIGH);
+    else                   digitalWrite(RELAY_PINS[i], relayStates[i] ? HIGH : LOW);
   }
-  
-  Serial.println("Relays initialized successfully\n");
 }
 
-/**
- * Initialize DS18B20 temperature sensors (optional)
- */
 void initSensors() {
-  Serial.println("\n=== Initializing Temperature Sensors ===");
-  
   sensors.begin();
   sensorCount = sensors.getDeviceCount();
-  
-  Serial.print("Found ");
-  Serial.print(sensorCount);
-  Serial.println(" DS18B20 sensor(s)");
-  
-  if (sensorCount == 0) {
-    Serial.println("ℹ️  No temperature sensors found - running in relay-only mode");
-    Serial.println("   You can still monitor temperature if sensors are added later");
-  } else {
-    // Set resolution for all sensors to 12 bits (highest accuracy)
+  if (sensorCount > 0) {
     for (uint8_t i = 0; i < sensorCount; i++) {
       DeviceAddress addr;
-      if (sensors.getAddress(addr, i)) {
-        sensors.setResolution(addr, 12);  // Highest accuracy
-      }
+      if (sensors.getAddress(addr, i)) sensors.setResolution(addr, 12);
     }
-    Serial.println("✓ Temperature sensors ready for monitoring and data logging");
+    sensors.setWaitForConversion(false);
   }
-  Serial.println();
 }
 
-/**
- * Set relay state
- * 
- * @param relayIndex Index of relay (0 to NUM_RELAYS-1)
- * @param newState true to turn ON, false to turn OFF
- */
-void setRelay(int relayIndex, bool newState) {
-  if (relayIndex < 0 || relayIndex >= NUM_RELAYS) return;
-  
-  relayStates[relayIndex] = newState;
-  
-  // Active-LOW: LOW = ON, HIGH = OFF
-  // Active-HIGH: HIGH = ON, LOW = OFF
-  digitalWrite(RELAY_PINS[relayIndex], (newState && ACTIVE_LOW_RELAYS) ? LOW : HIGH);
-  
-  Serial.printf("Relay #%d (GPIO %d): %s\n", 
-               relayIndex + 1, RELAY_PINS[relayIndex], newState ? "ON" : "OFF");
+void setRelay(int index, bool state) {
+  if (index < 0 || index >= NUM_RELAYS) return;
+  bool changed = (relayStates[index] != state);
+  relayStates[index] = state;
+  if (ACTIVE_LOW_RELAYS) { digitalWrite(RELAY_PINS[index], state ? LOW : HIGH); }
+  else { digitalWrite(RELAY_PINS[index], state ? HIGH : LOW); }
+
+  // Persist only on an actual change (avoids flash wear from repeated writes)
+  if (changed) {
+    nvsStorage.begin("iot_config", false);
+    nvsStorage.putBool(("rs_" + String(index)).c_str(), state);
+    nvsStorage.end();
+  }
 }
 
-/**
- * Send relay status to dashboard widgets
- */
 void updateRelayWidgets() {
   for (int i = 0; i < NUM_RELAYS; i++) {
-    // Only send if state changed
     if (relayStates[i] != lastRelayStates[i]) {
-      String stateStr = relayStates[i] ? "ON" : "OFF";
-      device.updateWidget(TARGET_ID, RELAY_WIDGET_IDS[i], stateStr);
-      
-      Serial.printf("Relay #%d: %s -> Widget: %s\n", 
-                    i + 1, stateStr.c_str(), RELAY_WIDGET_IDS[i].c_str());
-      
+      if (RELAY_WIDGET_IDS[i] != "") {
+        device.updateWidget(TARGET_ID, RELAY_WIDGET_IDS[i], relayStates[i] ? true : false);
+      }
       lastRelayStates[i] = relayStates[i];
     }
   }
 }
 
-/**
- * Send temperature readings to dashboard widgets for data logging
- * Uses both updateWidget (for display) and send_Sensor_Data_logger (for logging)
- */
-void updateTemperatureWidgets() {
-  // Skip if no sensors available
-  if (sensorCount == 0) {
-    return;
-  }
-  
-  sensors.requestTemperatures();
-  
-  // Prepare sensor data array for data logger
-  struct SensorData {
-    const char* name;
-    float value;
-  };
-  
-  SensorData sensorReadings[8];
-  uint8_t validSensorCount = 0;
-  
-  // Read all sensors
+void fetchAndLogTemperatures(String logTarget, String configId) {
+  if (sensorCount == 0 || configId == "") return;
+  struct { const char* name; float value; } sensorReadings[8];
+  uint8_t validCount = 0;
+
   for (uint8_t i = 0; i < sensorCount && i < 8; i++) {
     float tempC = sensors.getTempCByIndex(i);
-    
     if (tempC != -127.0) {
-      // Update individual temperature widget for real-time display
-      device.updateWidget(TARGET_ID, TEMP_WIDGET_IDS[i], tempC);
-      
-      Serial.printf("Temp Sensor #%d: %.1f°C -> Widget: %s\n", 
-                    i + 1, tempC, TEMP_WIDGET_IDS[i].c_str());
-      
-      // Store for batch data logging
-      sensorReadings[validSensorCount].name = strdup(("Sensor_" + String(i + 1)).c_str());
-      sensorReadings[validSensorCount].value = tempC;
-      validSensorCount++;
+      if (TEMP_WIDGET_IDS[i] != "") { device.updateWidget(TARGET_ID, TEMP_WIDGET_IDS[i], tempC); }
+      sensorReadings[validCount++] = { SENSOR_NAMES[i], tempC };
     }
   }
-  
-  // Send all sensor data to data logger in one call
-  if (validSensorCount > 0) {
-    // Build initializer list dynamically with proper key-value pairs
-    switch(validSensorCount) {
-      case 1:
-        device.send_Sensor_Data_logger(TARGET_ID, CONFIG_ID, {
-          {sensorReadings[0].name, sensorReadings[0].value}
-        });
-        break;
-      case 2:
-        device.send_Sensor_Data_logger(TARGET_ID, CONFIG_ID, {
-          {sensorReadings[0].name, sensorReadings[0].value},
-          {sensorReadings[1].name, sensorReadings[1].value}
-        });
-        break;
-      case 3:
-        device.send_Sensor_Data_logger(TARGET_ID, CONFIG_ID, {
-          {sensorReadings[0].name, sensorReadings[0].value},
-          {sensorReadings[1].name, sensorReadings[1].value},
-          {sensorReadings[2].name, sensorReadings[2].value}
-        });
-        break;
-      case 4:
-        device.send_Sensor_Data_logger(TARGET_ID, CONFIG_ID, {
-          {"Sensor_1", sensorReadings[0].value},
-          {"Sensor_2", sensorReadings[1].value},
-          {"Sensor_3", sensorReadings[2].value},
-          {"Sensor_4", sensorReadings[3].value}
-        });
-        break;
-      default:
-        // For 5+ sensors, use multiple calls or custom approach
-        for (uint8_t i = 0; i < validSensorCount; i++) {
-          device.updateWidget(TARGET_ID, "datalog-" + String(i), sensorReadings[i].value);
-        }
-        break;
+
+  if (validCount > 0 && logTarget != "" && logTarget != TARGET_ID) {
+    switch(validCount) {
+      case 1: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}}); break;
+      case 2: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}}); break;
+      case 3: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}}); break;
+      case 4: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}, {sensorReadings[3].name, sensorReadings[3].value}}); break;
+      case 5: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}, {sensorReadings[3].name, sensorReadings[3].value}, {sensorReadings[4].name, sensorReadings[4].value}}); break;
+      case 6: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}, {sensorReadings[3].name, sensorReadings[3].value}, {sensorReadings[4].name, sensorReadings[4].value}, {sensorReadings[5].name, sensorReadings[5].value}}); break;
+      case 7: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}, {sensorReadings[3].name, sensorReadings[3].value}, {sensorReadings[4].name, sensorReadings[4].value}, {sensorReadings[5].name, sensorReadings[5].value}, {sensorReadings[6].name, sensorReadings[6].value}}); break;
+      case 8: device.send_Sensor_Data_logger(logTarget, configId, {{sensorReadings[0].name, sensorReadings[0].value}, {sensorReadings[1].name, sensorReadings[1].value}, {sensorReadings[2].name, sensorReadings[2].value}, {sensorReadings[3].name, sensorReadings[3].value}, {sensorReadings[4].name, sensorReadings[4].value}, {sensorReadings[5].name, sensorReadings[5].value}, {sensorReadings[6].name, sensorReadings[6].value}, {sensorReadings[7].name, sensorReadings[7].value}}); break;
     }
-    
-    Serial.println("Temperature data logged via send_Sensor_Data_logger");
   }
+}
+
+// ============== HEAVY DEBUGGING ENGINES ==============
+
+void evaluateThermostats() {
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    if (!thermostats[i].active) continue;
+
+    int sIdx = thermostats[i].sensorIndex;
+
+    Serial.println("\n[Thermostat] Checking Relay " + String(i) + "...");
+    Serial.println("  -> Assigned to Sensor Index: " + String(sIdx));
+
+    if (sIdx < 0 || sIdx >= sensorCount) {
+      Serial.println("  -> ERROR: Assigned sensor does not exist! (Only " + String(sensorCount) + " sensors detected)");
+      continue;
+    }
+
+    float currentTemp = sensors.getTempCByIndex(sIdx);
+
+    if (currentTemp == -127.0) {
+      Serial.println("  -> ERROR: Sensor reading -127.0 (Disconnected). Forcing relay OFF.");
+      if (relayStates[i]) setRelay(i, false);
+      continue;
+    }
+
+    float target = thermostats[i].targetTemp;
+    float hystHigh = thermostats[i].hysteresisHigh;
+    float hystLow = thermostats[i].hysteresisLow;
+    bool isHeating = thermostats[i].modeHeating;
+    bool currentState = relayStates[i];
+
+    Serial.print("  -> Temp: "); Serial.print(currentTemp);
+    Serial.print("C | Target: "); Serial.print(target);
+    Serial.print("C | HystHigh (+): "); Serial.print(hystHigh);
+    Serial.print(" | HystLow (-): "); Serial.print(hystLow);
+    Serial.print(" | Mode: "); Serial.print(isHeating ? "HEATING" : "COOLING");
+    Serial.print(" | Current State: "); Serial.println(currentState ? "ON" : "OFF");
+
+    if (isHeating) {
+      if (currentTemp <= (target - hystLow) && !currentState) {
+        Serial.println("  -> ACTION: Too cold! Turning Relay ON.");
+        setRelay(i, true);
+      }
+      else if (currentTemp >= (target + hystHigh) && currentState) {
+        Serial.println("  -> ACTION: Warm enough! Turning Relay OFF.");
+        setRelay(i, false);
+      } else {
+        Serial.println("  -> ACTION: Temperature is in the safe zone. No changes.");
+      }
+    } else {
+      // COOLING Logic
+      if (currentTemp >= (target + hystHigh) && !currentState) {
+        Serial.println("  -> ACTION: Too hot! Turning Relay ON.");
+        setRelay(i, true);
+      }
+      else if (currentTemp <= (target - hystLow) && currentState) {
+        Serial.println("  -> ACTION: Cool enough! Turning Relay OFF.");
+        setRelay(i, false);
+      } else {
+        Serial.println("  -> ACTION: Temperature is in the safe zone. No changes.");
+      }
+    }
+  }
+}
+
+void evaluateTimers() {
+  unsigned long currentMillis = millis();
+
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    if (!timers[i].active) continue;
+
+    Serial.println("\n[Timer] Checking Relay " + String(i) + "...");
+
+    if (timers[i].lastToggleTime == 0) {
+      timers[i].lastToggleTime = currentMillis;
+      timers[i].currentPhaseOn = true;
+      setRelay(i, true);
+      Serial.println("  -> ACTION: Timer Initialized. Starting ON phase.");
+      continue;
+    }
+
+    unsigned long elapsed = currentMillis - timers[i].lastToggleTime;
+
+    if (timers[i].currentPhaseOn) {
+      unsigned long remaining = (timers[i].onTimeMs > elapsed) ? (timers[i].onTimeMs - elapsed) : 0;
+      Serial.print("  -> Phase: ON | Elapsed: "); Serial.print(elapsed / 1000);
+      Serial.print("s | Target: "); Serial.print(timers[i].onTimeMs / 1000);
+      Serial.print("s | Remaining: "); Serial.print(remaining / 1000); Serial.println("s");
+
+      if (elapsed >= timers[i].onTimeMs) {
+        timers[i].currentPhaseOn = false;
+        timers[i].lastToggleTime = currentMillis;
+        setRelay(i, false);
+        Serial.println("  -> ACTION: ON time finished. Switching Relay OFF.");
+      } else {
+        Serial.println("  -> ACTION: Waiting for ON phase to complete.");
+      }
+    } else {
+      unsigned long remaining = (timers[i].offTimeMs > elapsed) ? (timers[i].offTimeMs - elapsed) : 0;
+      Serial.print("  -> Phase: OFF | Elapsed: "); Serial.print(elapsed / 1000);
+      Serial.print("s | Target: "); Serial.print(timers[i].offTimeMs / 1000);
+      Serial.print("s | Remaining: "); Serial.print(remaining / 1000); Serial.println("s");
+
+      if (elapsed >= timers[i].offTimeMs) {
+        timers[i].currentPhaseOn = true;
+        timers[i].lastToggleTime = currentMillis;
+        setRelay(i, true);
+        Serial.println("  -> ACTION: OFF time finished. Switching Relay ON.");
+      } else {
+        Serial.println("  -> ACTION: Waiting for OFF phase to complete.");
+      }
+    }
+  }
+}
+
+
+// Evaluates Daily Time Schedules
+void evaluateSchedules() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("\n[Schedule] NTP Sync pending... Waiting for Network Time.");
+    return;
+  }
+
+  static bool bootSyncComplete = false;
+
+  int currentMins = (timeinfo.tm_hour * 60) + timeinfo.tm_min;
+
+  String hh = (timeinfo.tm_hour < 10 ? "0" : "") + String(timeinfo.tm_hour);
+  String mm = (timeinfo.tm_min < 10 ? "0" : "") + String(timeinfo.tm_min);
+  Serial.println("\n[Schedule] Checking Clock... Current Time is " + hh + ":" + mm);
+
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    if (!schedules[i].active) continue;
+
+    int startMins = (schedules[i].startHour * 60) + schedules[i].startMin;
+    int endMins = (schedules[i].endHour * 60) + schedules[i].endMin;
+
+    // Format schedule times for debug
+    String sHH = (schedules[i].startHour < 10 ? "0" : "") + String(schedules[i].startHour);
+    String sMM = (schedules[i].startMin < 10 ? "0" : "") + String(schedules[i].startMin);
+    String eHH = (schedules[i].endHour < 10 ? "0" : "") + String(schedules[i].endHour);
+    String eMM = (schedules[i].endMin < 10 ? "0" : "") + String(schedules[i].endMin);
+
+    Serial.println("  -> Relay " + String(i) + " is scheduled from " + sHH + ":" + sMM + " to " + eHH + ":" + eMM + " (Mode: " + schedules[i].mode + ")");
+
+    bool inWindow = false;
+    if (startMins <= endMins) {
+      inWindow = (currentMins >= startMins && currentMins < endMins);
+    } else {
+      inWindow = (currentMins >= startMins || currentMins < endMins);
+    }
+
+    if (inWindow && (!schedules[i].isExecuting || !bootSyncComplete)) {
+      Serial.println("  -> ACTION: ⏰ Time window active! Injecting Schedule logic.");
+      schedules[i].isExecuting = true;
+      thermostats[i].active = false;
+      timers[i].active = false;
+
+      if (schedules[i].mode == "RELAY_ON") {
+        setRelay(i, true);
+        Serial.println("  -> Result: Forced Relay ON.");
+      } else if (schedules[i].mode == "RELAY_OFF") {
+        setRelay(i, false);
+        Serial.println("  -> Result: Forced Relay OFF.");
+      } else if (schedules[i].mode == "THERMOSTAT") {
+        thermostats[i].targetTemp = schedules[i].targetTemp;
+        thermostats[i].hysteresisHigh = schedules[i].hysteresisHigh;
+        thermostats[i].hysteresisLow = schedules[i].hysteresisLow;
+        thermostats[i].modeHeating = schedules[i].modeHeating;
+        thermostats[i].active = true;
+        Serial.println("  -> Result: Overridden Thermostat settings & activated.");
+      } else if (schedules[i].mode == "TIMER") {
+        timers[i].onTimeMs = schedules[i].onTimeMs;
+        timers[i].offTimeMs = schedules[i].offTimeMs;
+        timers[i].lastToggleTime = 0;
+        timers[i].active = true;
+        Serial.println("  -> Result: Overridden Timer settings & activated.");
+      }
+    }
+
+    if (!inWindow && (schedules[i].isExecuting || !bootSyncComplete)) {
+      Serial.println("  -> ACTION: 🛑 Outside scheduled window! Forcing automations OFF.");
+      schedules[i].isExecuting = false;
+
+      // Forcefully kill any ghost states that loaded from NVS
+      thermostats[i].active = false;
+      timers[i].active = false;
+      setRelay(i, false);
+    }
+  }
+
+  bootSyncComplete = true;
 }
 
 // ============== CLOUD COMMAND HANDLER ==============
+void handleCloudCommand(JsonObject& msg) {
+  String from = msg["from"].as<String>();
+  if (!msg.containsKey("payload")) return;
+  JsonObject payload = msg["payload"];
+  Serial.println("--- Incoming Message ---");
+  serializeJson(msg, Serial);
+  Serial.println("\n------------------------");
 
-void setupCloudCommandHandler() {
-  device.setUserCommandHandler([](JsonObject& msg) {
-    String from = msg["from"].as<String>();
-    
-    if (!msg.containsKey("payload")) return;
-    JsonObject payload = msg["payload"];
-    
-    Serial.println("\n=== Cloud Command Received ===");
-    serializeJson(payload, Serial);
-    Serial.println();
-    
-    // Handle RELAY_CONTROL command for individual relay control (8 channels)
-    JsonObject relayCmd = device.findCommand(payload, "RELAY_CONTROL");
-    if (!relayCmd.isNull()) {
-      JsonArray actions = relayCmd["actions"];
-      
-      for (JsonObject action : actions) {
-        String actionName = action["action"].as<String>();
-        JsonObject params = action["params"];
-        
-        // Support multiple parameter names for flexibility
-        int relayChannel = -1;
-        
-        // Try different parameter names
-        if (params.containsKey("channel")) {
-          relayChannel = params["channel"] | -1;
-        } else if (params.containsKey("relay")) {
-          relayChannel = params["relay"] | -1;
-        } else if (params.containsKey("relayNumber")) {
-          relayChannel = params["relayNumber"] | -1;
-        } else if (params.containsKey("relay_index")) {
-          relayChannel = params["relay_index"] | -1;
-        }
-        
-        // Validate channel number
-        if (relayChannel >= 0 && relayChannel < NUM_RELAYS) {
-          bool newState = false;
-          
-          // Determine desired state from action name or params
-          if (actionName.indexOf("ON") >= 0 || actionName.indexOf("On") >= 0 || actionName == "HIGH") {
-            newState = true;
-          } else if (actionName.indexOf("OFF") >= 0 || actionName.indexOf("Off") >= 0 || actionName == "LOW") {
-            newState = false;
-          }
-          
-          // Also check params for explicit state
-          if (params.containsKey("state")) {
-            String stateStr = params["state"].as<String>();
-            newState = (stateStr == "ON" || stateStr == "on" || stateStr == "1" || stateStr == "true" || stateStr == "HIGH");
-          }
-          
-          // Update relay state
-          setRelay(relayChannel, newState);
-          
-          // Update relay widget immediately
-          String stateStr = newState ? "ON" : "OFF";
-          device.updateWidget(TARGET_ID, RELAY_WIDGET_IDS[relayChannel], stateStr);
-          
-          // Send confirmation (capture variables by value)
-          int responseChannel = relayChannel;
-          bool responseState = newState;
-          device.sendTo(from, [responseChannel, responseState](JsonObject& response) {
-            response["status"] = "success";
-            response["message"] = "Relay state updated";
-            response["channel"] = responseChannel;
-            response["state"] = responseState ? "ON" : "OFF";
-          });
-        } else {
-          Serial.printf("Invalid relay channel: %d (valid: 0-%d)\n", relayChannel, NUM_RELAYS - 1);
+  // --- 1. HANDLE RELAY CONTROL ---
+  JsonObject relayCmd = device.findCommand(payload, "RELAY_CONTROL");
+  if (!relayCmd.isNull()) {
+    for (JsonObject action : relayCmd["actions"].as<JsonArray>()) {
+      JsonObject params = action["params"];
+      int channel = -1;
+      if (params.containsKey("channel")) channel = params["channel"].as<int>();
+      else if (params.containsKey("relay")) channel = params["relay"].as<int>();
+      else if (params.containsKey("relay_index")) channel = params["relay_index"].as<int>();
+
+      if (channel >= 0 && channel < NUM_RELAYS) {
+        String stateStr = params.containsKey("state") ? params["state"].as<String>() : action["action"].as<String>();
+        bool newState = (stateStr.indexOf("ON") >= 0 || stateStr == "1" || stateStr == "true" || stateStr == "HIGH");
+        if (params.containsKey("widgetId")) saveRelayWidgetId(channel, params["widgetId"].as<String>());
+
+        // THE FIX: Manual button presses temporarily pause current automations, BUT LEAVE THE SCHEDULE ALIVE
+        thermostats[channel].active = false;
+        timers[channel].active = false;
+        // schedules[channel].active = false;  <--- COMMENTED OUT TO PROTECT YOUR SCHEDULES!
+
+        setRelay(channel, newState);
+        if (RELAY_WIDGET_IDS[channel] != "") { device.updateWidget(TARGET_ID, RELAY_WIDGET_IDS[channel], newState ? true : false); }
+        device.sendTo(from, [channel, newState](JsonObject& response) {
+          response["status"] = "success";
+          response["channel"] = channel;
+          response["state"] = newState ? true : false;
+        });
+      }
+    }
+  }
+
+  // --- 2. HANDLE GET SENSOR VALUE ---
+  JsonObject sensorCmd = device.findCommand(payload, "GET_SENSOR_VALUE");
+  if (!sensorCmd.isNull()) {
+    for (JsonObject actionObj : sensorCmd["actions"].as<JsonArray>()) {
+      if (actionObj["action"].as<String>() == "ALL") {
+        if (payload.containsKey("configId")) {
+          saveConfigId(payload["configId"].as<String>());
+          DATA_LOGGER_ID = from;
+          fetchAndLogTemperatures(DATA_LOGGER_ID, currentConfigId);
         }
       }
     }
-    
-    // Handle MANUAL_RELAY_CONTROL command (legacy support)
-    JsonObject manualCmd = device.findCommand(payload, "MANUAL_RELAY_CONTROL");
-    if (!manualCmd.isNull()) {
-      JsonArray actions = manualCmd["actions"];
-      
-      for (JsonObject action : actions) {
-        String actionName = action["action"].as<String>();
-        JsonObject params = action["params"];
-        
-        int relayIndex = params["relayIndex"] | params["relay"] | -1;
-        
-        if (relayIndex >= 0 && relayIndex < NUM_RELAYS) {
-          if (actionName == "RELAY_ON" || actionName.indexOf("ON") >= 0) {
-            setRelay(relayIndex, true);
+  }
+
+  // --- 3. HANDLE SET THERMOSTAT ---
+  JsonObject thermoCmd = device.findCommand(payload, "SET_THERMOSTAT");
+  if (!thermoCmd.isNull()) {
+    for (JsonObject action : thermoCmd["actions"].as<JsonArray>()) {
+      JsonObject params = action["params"];
+      if (params.containsKey("relay")) {
+        int relay = params["relay"].as<int>();
+        if (relay >= 0 && relay < NUM_RELAYS) {
+          if (params.containsKey("active")) thermostats[relay].active = params["active"].as<bool>();
+          if (params.containsKey("sensorIndex")) thermostats[relay].sensorIndex = params["sensorIndex"].as<int>();
+          if (params.containsKey("targetTemp")) thermostats[relay].targetTemp = params["targetTemp"].as<float>();
+
+          // Asymmetrical Updates
+          if (params.containsKey("hysteresisHigh")) thermostats[relay].hysteresisHigh = params["hysteresisHigh"].as<float>();
+          if (params.containsKey("hysteresisLow")) thermostats[relay].hysteresisLow = params["hysteresisLow"].as<float>();
+
+          // Backwards compatibility safeguard
+          if (params.containsKey("hysteresis")) {
+             thermostats[relay].hysteresisHigh = params["hysteresis"].as<float>();
+             thermostats[relay].hysteresisLow = params["hysteresis"].as<float>();
           }
-          else if (actionName == "RELAY_OFF" || actionName.indexOf("OFF") >= 0) {
-            setRelay(relayIndex, false);
-          }
-          
-          // Update relay widget immediately
-          updateRelayWidgets();
-          
-          // Send confirmation
-          device.sendTo(from, [](JsonObject& response) {
-            response["status"] = "success";
-            response["message"] = "Relay state updated";
-          });
+
+          if (params.containsKey("mode")) thermostats[relay].modeHeating = (params["mode"].as<String>() == "HEATING");
+
+          if (thermostats[relay].active) timers[relay].active = false;
+
+          nvsStorage.begin("iot_config", false);
+          nvsStorage.putBool(("tcA_" + String(relay)).c_str(), thermostats[relay].active);
+          nvsStorage.putInt(("tcS_" + String(relay)).c_str(), thermostats[relay].sensorIndex);
+          nvsStorage.putFloat(("tcT_" + String(relay)).c_str(), thermostats[relay].targetTemp);
+          nvsStorage.putFloat(("tcHh_" + String(relay)).c_str(), thermostats[relay].hysteresisHigh);
+          nvsStorage.putFloat(("tcHl_" + String(relay)).c_str(), thermostats[relay].hysteresisLow);
+          nvsStorage.putBool(("tcM_" + String(relay)).c_str(), thermostats[relay].modeHeating);
+          nvsStorage.end();
+          Serial.println("Saved Thermostat for Relay " + String(relay));
         }
       }
     }
-    
-    // Handle GET_STATUS command
-    JsonObject statusCmd = device.findCommand(payload, "GET_STATUS");
-    if (!statusCmd.isNull()) {
-      device.sendTo(from, [](JsonObject& response) {
-        response["command"] = "SYSTEM_STATUS";
-        response["relayCount"] = NUM_RELAYS;
-        response["sensorCount"] = sensorCount;
-        response["uptime"] = millis() / 1000;
-        response["freeHeap"] = ESP.getFreeHeap();
-        
-        // Add current time info
-        response["timeSynced"] = (time(nullptr) >= 1000000000L);
-        response["currentTime"] = device.getNetworkDateTime();
-        
-        // Add relay states for ALL 8 relays
-        JsonArray states = response.createNestedArray("relayStates");
-        for (int i = 0; i < NUM_RELAYS; i++) {
-          states.add(relayStates[i]);
+  }
+
+  // --- 4. HANDLE SET TIMER LOOP ---
+  JsonObject loopCmd = device.findCommand(payload, "SET_TIMER");
+  if (!loopCmd.isNull()) {
+    for (JsonObject action : loopCmd["actions"].as<JsonArray>()) {
+      JsonObject params = action["params"];
+      if (params.containsKey("relay")) {
+        int relay = params["relay"].as<int>();
+        if (relay >= 0 && relay < NUM_RELAYS) {
+          if (params.containsKey("active")) timers[relay].active = params["active"].as<bool>();
+          if (params.containsKey("onMinutes")) timers[relay].onTimeMs = (uint32_t)(params["onMinutes"].as<float>() * 60000);
+          if (params.containsKey("offMinutes")) timers[relay].offTimeMs = (uint32_t)(params["offMinutes"].as<float>() * 60000);
+
+          timers[relay].lastToggleTime = 0;
+          if (timers[relay].active) thermostats[relay].active = false;
+
+          nvsStorage.begin("iot_config", false);
+          nvsStorage.putBool(("tmA_" + String(relay)).c_str(), timers[relay].active);
+          nvsStorage.putUInt(("tmOn_" + String(relay)).c_str(), timers[relay].onTimeMs);
+          nvsStorage.putUInt(("tmOff_" + String(relay)).c_str(), timers[relay].offTimeMs);
+          nvsStorage.end();
+          Serial.println("Saved Timer for Relay " + String(relay));
         }
-        
-        // Add current temperatures (if sensors available)
-        JsonArray temps = response.createNestedArray("temperatures");
-        if (sensorCount > 0) {
-          for (uint8_t i = 0; i < sensorCount && i < 8; i++) {
-            temps.add(sensors.getTempCByIndex(i));
-          }
-        }
-      });
+      }
     }
-  });
+  }
+
+  // --- 5. HANDLE TIME SCHEDULES ---
+  JsonObject scheduleCmd = device.findCommand(payload, "SET_SCHEDULE");
+  if (!scheduleCmd.isNull()) {
+    for (JsonObject action : scheduleCmd["actions"].as<JsonArray>()) {
+      JsonObject params = action["params"];
+      if (params.containsKey("relay")) {
+        int relay = params["relay"].as<int>();
+        if (relay >= 0 && relay < NUM_RELAYS) {
+          if (params.containsKey("active")) schedules[relay].active = params["active"].as<bool>();
+          if (params.containsKey("startHour")) schedules[relay].startHour = params["startHour"].as<int>();
+          if (params.containsKey("startMin")) schedules[relay].startMin = params["startMin"].as<int>();
+          if (params.containsKey("endHour")) schedules[relay].endHour = params["endHour"].as<int>();
+          if (params.containsKey("endMin")) schedules[relay].endMin = params["endMin"].as<int>();
+          if (params.containsKey("mode")) schedules[relay].mode = params["mode"].as<String>();
+
+          if (params.containsKey("targetTemp")) schedules[relay].targetTemp = params["targetTemp"].as<float>();
+
+          // Asymmetrical Updates
+          if (params.containsKey("hysteresisHigh")) schedules[relay].hysteresisHigh = params["hysteresisHigh"].as<float>();
+          if (params.containsKey("hysteresisLow")) schedules[relay].hysteresisLow = params["hysteresisLow"].as<float>();
+
+          // Backwards compatibility safeguard
+          if (params.containsKey("hysteresis")) {
+             schedules[relay].hysteresisHigh = params["hysteresis"].as<float>();
+             schedules[relay].hysteresisLow = params["hysteresis"].as<float>();
+          }
+
+          if (params.containsKey("modeHeating")) schedules[relay].modeHeating = params["modeHeating"].as<bool>();
+          if (params.containsKey("onMinutes")) schedules[relay].onTimeMs = (uint32_t)(params["onMinutes"].as<float>() * 60000);
+          if (params.containsKey("offMinutes")) schedules[relay].offTimeMs = (uint32_t)(params["offMinutes"].as<float>() * 60000);
+
+          schedules[relay].isExecuting = false;
+
+          nvsStorage.begin("iot_config", false);
+          nvsStorage.putBool(("scA_" + String(relay)).c_str(), schedules[relay].active);
+          nvsStorage.putUChar(("scSH_" + String(relay)).c_str(), schedules[relay].startHour);
+          nvsStorage.putUChar(("scSM_" + String(relay)).c_str(), schedules[relay].startMin);
+          nvsStorage.putUChar(("scEH_" + String(relay)).c_str(), schedules[relay].endHour);
+          nvsStorage.putUChar(("scEM_" + String(relay)).c_str(), schedules[relay].endMin);
+          nvsStorage.putString(("scMd_" + String(relay)).c_str(), schedules[relay].mode);
+          nvsStorage.putFloat(("scTT_" + String(relay)).c_str(), schedules[relay].targetTemp);
+          nvsStorage.putFloat(("scHh_" + String(relay)).c_str(), schedules[relay].hysteresisHigh);
+          nvsStorage.putFloat(("scHl_" + String(relay)).c_str(), schedules[relay].hysteresisLow);
+          nvsStorage.putBool(("scMH_" + String(relay)).c_str(), schedules[relay].modeHeating);
+          nvsStorage.putUInt(("scTO_" + String(relay)).c_str(), schedules[relay].onTimeMs);
+          nvsStorage.putUInt(("scTF_" + String(relay)).c_str(), schedules[relay].offTimeMs);
+          nvsStorage.end();
+
+          Serial.println("Updated & Saved Daily Schedule for Relay " + String(relay));
+        }
+      }
+    }
+  }
+
+  // --- 6. HANDLE GET UI ---
+  if (payload.containsKey("command") && payload["command"].as<String>() == "get_ui") {
+    for (int i = 0; i < NUM_RELAYS; i++) {
+      if (RELAY_WIDGET_IDS[i] != "") device.updateWidget(TARGET_ID, RELAY_WIDGET_IDS[i], relayStates[i] ? true : false);
+    }
+  }
+
+  // --- 7. SETTINGS REPORT ---
+  JsonObject getSettingsCmd = device.findCommand(payload, "GET_SETTINGS");
+  if (!getSettingsCmd.isNull()) {
+    device.sendTo(from, [](JsonObject& response) {
+      response["status"] = "success";
+      response["type"] = "SETTINGS_REPORT";
+      JsonArray rules = response.createNestedArray("rules");
+
+      for (int i = 0; i < NUM_RELAYS; i++) {
+        JsonObject relayObj = rules.createNestedObject();
+        relayObj["relay"] = i;
+
+        JsonObject thermo = relayObj.createNestedObject("thermostat");
+        thermo["active"] = thermostats[i].active;
+        thermo["sensorIndex"] = thermostats[i].sensorIndex;
+        thermo["targetTemp"] = thermostats[i].targetTemp;
+        thermo["hysteresisHigh"] = thermostats[i].hysteresisHigh;
+        thermo["hysteresisLow"] = thermostats[i].hysteresisLow;
+        thermo["mode"] = thermostats[i].modeHeating ? "HEATING" : "COOLING";
+
+        JsonObject timer = relayObj.createNestedObject("timer");
+        timer["active"] = timers[i].active;
+        timer["onMinutes"] = timers[i].onTimeMs / 60000.0;
+        timer["offMinutes"] = timers[i].offTimeMs / 60000.0;
+
+        JsonObject sch = relayObj.createNestedObject("schedule");
+        sch["active"] = schedules[i].active;
+        sch["start"] = (schedules[i].startHour < 10 ? "0" : "") + String(schedules[i].startHour) + ":" + (schedules[i].startMin < 10 ? "0" : "") + String(schedules[i].startMin);
+        sch["end"] = (schedules[i].endHour < 10 ? "0" : "") + String(schedules[i].endHour) + ":" + (schedules[i].endMin < 10 ? "0" : "") + String(schedules[i].endMin);
+        sch["mode"] = schedules[i].mode;
+
+      }
+    });
+  }
 }
 
-// ============== ARDUINO SETUP & LOOP ==============
+// ============== SETUP & LOOP ==============
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  
   Serial.println("\n========================================");
-  Serial.println("IoT Relay Controller with Temperature Monitoring");
-  Serial.println("Powered by Hyperwisor IoT");
+  Serial.println("Universal IoT Controller - Master Engine");
   Serial.println("========================================\n");
-  
-  Serial.println("✓ IoT Control Mode with Data Logging");
-  Serial.println("Manual cloud control + Temperature monitoring");
-  Serial.println("All relays controllable via Hyperwisor dashboard");
-  Serial.println("Temperature data logged via send_Sensor_Data_logger");
-  Serial.println("========================================\n");
-  
-  // Initialize hardware
+
+  loadPersistentData();
   initRelays();
-  initSensors();  // Initialize temperature sensors
-  
-  // Setup cloud command handler
-  setupCloudCommandHandler();
-  
-  // Time and date functions
+  initSensors();
+
+  device.setUserCommandHandler(handleCloudCommand);
   device.setTimezone("IST");
-  
-  // Initialize Hyperwisor device
   device.begin();
-  
-  deviceId = device.getDeviceId();
-  Serial.print("Device ID: ");
-  Serial.println(deviceId);
-
-  userId = device.getUserId();
-  Serial.print("User ID: ");
-  Serial.println(userId);
-
   TARGET_ID = device.getUserId();
-  
-  Serial.println("\nDevice initialized successfully!");
-  Serial.println("Device ID: " + device.getDeviceId());
-  Serial.println("Dashboard: " + TARGET_ID);
-  if (sensorCount > 0) {
-    Serial.println("\nSystem ready - Monitoring temperature and controlling relays\n");
-  } else {
-    Serial.println("\nSystem ready - Waiting for cloud commands (no sensors detected)\n");
-  }
 }
 
 void loop() {
-  // Handle Hyperwisor connectivity
   device.loop();
-  
-  // Request temperature readings (non-blocking)
-  if (sensorCount > 0) {
-    sensors.requestTemperatures();
-  }
-  
-  // Update relay widgets (send state changes to dashboard)
   updateRelayWidgets();
-  
-  // Send temperature data to dashboard for data logging
-  if (millis() - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
-    lastTempUpdate = millis();
-    if (sensorCount > 0) {
-      updateTemperatureWidgets();
-    }
+  unsigned long currentMillis = millis();
+
+  // 1. Evaluate Timers (Every 1 second)
+  if (currentMillis - lastTimerCheck >= 1000) {
+    evaluateTimers();
+    lastTimerCheck = currentMillis;
   }
-  
-  // Send periodic status update
-  if (millis() - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
-    lastStatusUpdate = millis();
-    
-    // Print status to serial
-    Serial.println("\n--- Status Update ---");
-    for (int i = 0; i < NUM_RELAYS; i++) {
-      Serial.printf("Relay #%d (GPIO %d): %s\n",
-                   i + 1, RELAY_PINS[i], relayStates[i] ? "ON" : "OFF");
-    }
-    
-    // Print temperature readings
-    if (sensorCount > 0) {
-      Serial.println("\nTemperature Readings:");
-      for (uint8_t i = 0; i < sensorCount && i < 8; i++) {
-        float tempC = sensors.getTempCByIndex(i);
-        if (tempC != -127.0) {
-          Serial.printf("  Sensor #%d: %.1f°C\n", i + 1, tempC);
-        }
-      }
-      Serial.println("  → Data sent to logger every 5 seconds");
-    }
-    
-    Serial.println("---------------------\n");
+
+  // 2. Evaluate Daily Schedules (Every 10 seconds)
+  if (currentMillis - lastScheduleCheck >= SCHEDULE_CHECK_INTERVAL) {
+    evaluateSchedules();
+    lastScheduleCheck = currentMillis;
   }
-  
-  delay(100);  // Small delay to prevent watchdog trigger
+
+  // 3. Sensor Check & Hardware Recovery (Every 5 seconds)
+  if (currentMillis - lastTempRequest >= TEMP_UPDATE_INTERVAL) {
+    if (sensorCount == 0) {
+      Serial.println("\n[Hardware] ⚠️ 0 Sensors detected! Attempting to reboot 1-Wire bus...");
+      initSensors();
+    }
+    if (sensorCount > 0) {
+      sensors.requestTemperatures();
+      tempConversionPending = true;
+    }
+    lastTempRequest = currentMillis;
+  }
+
+  // 4. Thermostat Logic (Wait 800ms for Temp reading)
+  if (tempConversionPending && (currentMillis - lastTempRequest >= 800)) {
+    evaluateThermostats();
+    if (currentConfigId != "") {
+      String target = (DATA_LOGGER_ID != "") ? DATA_LOGGER_ID : TARGET_ID;
+      fetchAndLogTemperatures(target, currentConfigId);
+    }
+    tempConversionPending = false;
+  }
+
+  if (currentMillis - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
+    lastStatusUpdate = currentMillis;
+  }
 }
