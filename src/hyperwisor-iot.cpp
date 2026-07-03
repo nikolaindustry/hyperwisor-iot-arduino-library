@@ -12,6 +12,13 @@ HyperwisorIOT::HyperwisorIOT()
 // Public methods
 void HyperwisorIOT::begin()
 {
+  // Secure by default: bring up HSC (on-chip key + secure relay + handshake)
+  // unless the sketch explicitly opted out with disableSecurity(). Must run
+  // before we connect or enter AP provisioning.
+  if (!_securityDisabled && !securityEnabled) {
+    enableSecurity();
+  }
+
   getcredentials();
 
   if (!ssid.isEmpty() && !password.isEmpty())
@@ -191,6 +198,19 @@ String HyperwisorIOT::getSuccessHtml()
 {
   String message = "Device_is_connecting_to_the_new_network.";
   String redirectUrl = "hypervisorv4://provisioning?status=success&message=" + message;
+
+  // HSC Phase 2: hand the device's public key back to the app in the provisioning
+  // acknowledgment so the app can register it (physical proximity = ownership
+  // proof). Only when security is enabled. URL-encode the base64 (+, /, =).
+  if (securityEnabled) {
+    String pub = hsc.getPublicKeyBase64();
+    pub.replace("+", "%2B");
+    pub.replace("/", "%2F");
+    pub.replace("=", "%3D");
+    if (pub.length() > 0) {
+      redirectUrl += "&public_key=" + pub + "&device_id=" + deviceid;
+    }
+  }
 
   return R"rawliteral(
 <!DOCTYPE html>
@@ -428,6 +448,69 @@ String HyperwisorIOT::getUserId()
   String id = preferences.getString("userid", "unknown");
   preferences.end();
   return id;
+}
+
+// --- HSC v1 security ------------------------------------------------------
+
+void HyperwisorIOT::enableSecurity(const String &relayHost, uint16_t port)
+{
+  _securityDisabled = false;
+  if (securityEnabled) { realtime.setHost(relayHost, port); return; }
+  if (!hsc.begin()) {
+    Serial.println("❌ HSC: could not initialize device key — security NOT enabled");
+    return;
+  }
+  securityEnabled = true;
+  realtime.setHost(relayHost, port);
+  realtime.enableHSC([this](const String &nonce, const String &ts) {
+    return hsc.signChallenge(getDeviceId(), nonce, ts);
+  });
+  Serial.println("🔐 Security enabled — device will authenticate to the secured relay");
+}
+
+void HyperwisorIOT::disableSecurity()
+{
+  _securityDisabled = true;
+  Serial.println("⚠️  HSC disabled — using the legacy relay (UNAUTHENTICATED). Not recommended.");
+}
+
+String HyperwisorIOT::getPublicKeyBase64()
+{
+  return hsc.getPublicKeyBase64();
+}
+
+bool HyperwisorIOT::registerPublicKey(const String &functionsBaseUrl, const String &userAuthToken)
+{
+  String pub = hsc.getPublicKeyBase64();
+  if (pub.length() == 0) {
+    Serial.println("❌ HSC: no public key to register (call enableSecurity first)");
+    return false;
+  }
+
+  DynamicJsonDocument body(512);
+  body["device_id"] = getDeviceId();
+  body["public_key"] = pub;
+  body["algo"] = "p256";
+  String json;
+  serializeJson(body, json);
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.begin(client, functionsBaseUrl + "/relay-register-device");
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + userAuthToken);
+
+  int code = http.POST(json);
+  String resp = http.getString();
+  http.end();
+
+  if (code == 200) {
+    Serial.println("🔐 HSC: public key registered with platform ✓");
+    return true;
+  }
+  Serial.printf("❌ HSC: registration failed (HTTP %d): %s\n", code, resp.c_str());
+  return false;
 }
 
 // Manual provisioning: Set WiFi credentials

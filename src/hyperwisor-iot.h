@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include "nikolaindustry-realtime.h"
+#include "hyperwisor-hsc.h"
 #include <WebServer.h>
 #include <Preferences.h>
 #include <Update.h>
@@ -171,6 +172,18 @@ public:
    * Credentials are saved in NVS and reused on next boot.
    */
   void setWiFiCredentials(const String &ssid, const String &password);
+
+  // --- HSC v1 security (ON by default) ---
+  // The Hyperwisor Secure Channel is enabled automatically in begin(): the device
+  // generates/loads its on-chip P-256 key, connects to the Hyperwisor secure relay,
+  // and authenticates with a signed challenge. You normally don't call anything.
+  // Call enableSecurity("host") ONLY to override the relay host; disableSecurity()
+  // to opt out and use the legacy (unauthenticated) relay.
+  void enableSecurity(const String &relayHost = "hyperwisor-realtime-secure.onrender.com",
+                      uint16_t port = 443);
+  void disableSecurity();
+  String getPublicKeyBase64();
+  bool registerPublicKey(const String &functionsBaseUrl, const String &userAuthToken);
 
   /**
    * @brief Set custom device ID (overrides default)
@@ -676,6 +689,9 @@ public:
 private:
   // WiFi & Real-time Communication
   nikolaindustryrealtime realtime;
+  HyperwisorHSC hsc;
+  bool securityEnabled = false;
+  bool _securityDisabled = false; // set by disableSecurity(); default = secure
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;
