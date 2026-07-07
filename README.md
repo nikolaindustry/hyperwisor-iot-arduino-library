@@ -33,6 +33,7 @@ Built on the powerful [`nikolaindustry-realtime`](https://github.com/your-org/ni
 * 🧠 Smart command routing via `from` → `sendTo()` pairing
 * ✅ Command response feedback through real-time socket
 * 🔐 Preferences-based persistent storage
+* 🛡️ **Secure by default** — unique on-chip P-256 device identity (Hyperwisor Secure Channel)
 
 ---
 
@@ -88,6 +89,53 @@ On `hyper.begin()`:
 
 ---
 
+## 🔐 Security (Hyperwisor Secure Channel)
+
+**As of v2.0.0, security is ON by default.** Each device generates a unique
+**ECDSA P‑256 keypair on‑chip** (stored in NVS). The **private key never leaves the
+device** — only the public key is ever shared. On connect, the device proves its
+identity to the Hyperwisor secure relay with a challenge–response handshake, so
+nobody can impersonate your hardware.
+
+### What you get for free
+- `hyper.begin()` **automatically enables** the secure channel — no extra code.
+- The device connects to the secure relay and **authenticates before any data flows**.
+- The keypair is generated once and persisted in NVS; regular reboots keep the same identity.
+
+### Onboarding registers the public key
+During Wi‑Fi provisioning, the device hands its **public key** back to the Hyperwisor
+app (in the provisioning acknowledgment). The app registers it to your account so the
+relay knows the device is really yours.
+
+> **Important:** a device must be **onboarded through the Hyperwisor app** for its key
+> to be registered. A freshly flashed device that connects straight to saved Wi‑Fi
+> (skipping provisioning) won't have its key registered yet and will be rejected as
+> `unknown device` until you (re‑)provision it.
+
+### API
+| Method | Purpose |
+|--------|---------|
+| `hyper.begin()` | Auto‑enables security (default). |
+| `hyper.enableSecurity("host", port)` | Override the relay host/port (advanced). |
+| `hyper.disableSecurity()` | **Opt out** — call **before** `begin()` to use the legacy unauthenticated relay. |
+| `hyper.getPublicKeyBase64()` | The device's public key (base64 raw P‑256). |
+| `hyper.getDeviceId()` | The device's ID. |
+
+### Opting out (legacy mode)
+```cpp
+void setup() {
+  hyper.disableSecurity();   // MUST be called before begin()
+  hyper.begin();             // now uses the legacy unauthenticated relay
+}
+```
+
+### Upgrading from v1.x (breaking change)
+v2.0.0 is secure‑by‑default. Devices already in the field must **register their key**
+(re‑onboard through the app) to authenticate on the secure relay. Devices you can't
+re‑onboard yet can call `hyper.disableSecurity()` to stay on the legacy relay until
+migrated. OTA updates continue to work in both modes.
+
+---
 
 ## 📚 Dependencies
 
