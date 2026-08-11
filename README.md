@@ -115,25 +115,37 @@ relay knows the device is really yours.
 ### API
 | Method | Purpose |
 |--------|---------|
-| `hyper.begin()` | Auto‑enables security (default). |
-| `hyper.enableSecurity("host", port)` | Override the relay host/port (advanced). |
-| `hyper.disableSecurity()` | **Opt out** — call **before** `begin()` to use the legacy unauthenticated relay. |
+| `hyper.begin()` | Brings up the secure channel automatically. Nothing else to do. |
+| `hyper.enableSecurity("host", port)` | Point at a different relay host/port (advanced). |
 | `hyper.getPublicKeyBase64()` | The device's public key (base64 raw P‑256). |
 | `hyper.getDeviceId()` | The device's ID. |
+| ~~`hyper.disableSecurity()`~~ | **Deprecated — does nothing.** See below. |
 
-### Opting out (legacy mode)
-```cpp
-void setup() {
-  hyper.disableSecurity();   // MUST be called before begin()
-  hyper.begin();             // now uses the legacy unauthenticated relay
-}
-```
+### There is no longer an unauthenticated mode
+
+Earlier versions let you call `disableSecurity()` to fall back to an
+unauthenticated relay. **That relay has been retired.** Calling the method now
+does nothing except print a warning: it is kept only so sketches already in the
+field still compile.
+
+If you have a sketch that calls it, delete the call. Leaving it in is harmless,
+but it no longer does what its name suggests.
+
+> Had the method kept its old behaviour, it would now point the device at a host
+> that no longer exists — and a socket that never opens looks exactly like a
+> network problem, so it would have been painful to diagnose.
 
 ### Upgrading from v1.x (breaking change)
-v2.0.0 is secure‑by‑default. Devices already in the field must **register their key**
-(re‑onboard through the app) to authenticate on the secure relay. Devices you can't
-re‑onboard yet can call `hyper.disableSecurity()` to stay on the legacy relay until
-migrated. OTA updates continue to work in both modes.
+
+v2.0.0 is secure-only. A device must have its **public key registered** to
+connect at all, which happens automatically when it is onboarded through the
+Hyperwisor app.
+
+Devices in the field that have never been onboarded through the app will be
+rejected as `unknown device` until you re-provision them. There is no fallback
+to wait behind — re-onboarding is the migration path.
+
+OTA updates are unaffected.
 
 ---
 

@@ -470,8 +470,17 @@ void HyperwisorIOT::enableSecurity(const String &relayHost, uint16_t port)
 
 void HyperwisorIOT::disableSecurity()
 {
-  _securityDisabled = true;
-  Serial.println("⚠️  HSC disabled — using the legacy relay (UNAUTHENTICATED). Not recommended.");
+  // Deliberately does nothing any more.
+  //
+  // This used to drop the device onto the unauthenticated relay. That relay is
+  // switched off, so honouring the call would leave the device connected to
+  // nothing — a silent, hard-to-diagnose failure, since a socket that never
+  // opens is indistinguishable from a network problem.
+  //
+  // The symbol is kept so sketches already in the field still compile; it just
+  // no longer has anywhere to send them. Remove the call.
+  Serial.println("⚠️  disableSecurity() is deprecated and now does nothing.");
+  Serial.println("    The unauthenticated relay is retired; HSC is the only channel.");
 }
 
 String HyperwisorIOT::getPublicKeyBase64()

@@ -177,10 +177,12 @@ public:
   // The Hyperwisor Secure Channel is enabled automatically in begin(): the device
   // generates/loads its on-chip P-256 key, connects to the Hyperwisor secure relay,
   // and authenticates with a signed challenge. You normally don't call anything.
-  // Call enableSecurity("host") ONLY to override the relay host; disableSecurity()
-  // to opt out and use the legacy (unauthenticated) relay.
+  // Call enableSecurity("host") ONLY to override the relay host. There is no
+  // opt-out any more — the unauthenticated relay is retired.
   void enableSecurity(const String &relayHost = "hyperwisor-realtime-secure.onrender.com",
                       uint16_t port = 443);
+  /** @deprecated Does nothing. The unauthenticated relay is retired and HSC is
+   *  the only channel; calling this no longer changes behaviour. Remove it. */
   void disableSecurity();
   String getPublicKeyBase64();
   bool registerPublicKey(const String &functionsBaseUrl, const String &userAuthToken);
@@ -691,7 +693,9 @@ private:
   nikolaindustryrealtime realtime;
   HyperwisorHSC hsc;
   bool securityEnabled = false;
-  bool _securityDisabled = false; // set by disableSecurity(); default = secure
+  // Always false now: disableSecurity() is a no-op, so begin() always brings
+  // up HSC. Kept only so the branch in begin() reads explicitly.
+  bool _securityDisabled = false;
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;
