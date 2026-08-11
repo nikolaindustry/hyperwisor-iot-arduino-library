@@ -27,9 +27,7 @@ begin	KEYWORD2
 clearCredentials	KEYWORD2
 deleteDatabaseData	KEYWORD2
 deleteDatabaseDataWithResponse	KEYWORD2
-disableSecurity	KEYWORD2
 enableHSC	KEYWORD2
-enableSecurity	KEYWORD2
 erase	KEYWORD2
 error	KEYWORD2
 getDatabaseData	KEYWORD2
@@ -66,6 +64,7 @@ setDeviceId	KEYWORD2
 setHost	KEYWORD2
 setOnConnectionStatusChange	KEYWORD2
 setOnMessageCallback	KEYWORD2
+setRelayHost	KEYWORD2
 setTimezone	KEYWORD2
 setUserCommandHandler	KEYWORD2
 setUserId	KEYWORD2

@@ -173,17 +173,15 @@ public:
    */
   void setWiFiCredentials(const String &ssid, const String &password);
 
-  // --- HSC v1 security (ON by default) ---
-  // The Hyperwisor Secure Channel is enabled automatically in begin(): the device
-  // generates/loads its on-chip P-256 key, connects to the Hyperwisor secure relay,
-  // and authenticates with a signed challenge. You normally don't call anything.
-  // Call enableSecurity("host") ONLY to override the relay host. There is no
-  // opt-out any more — the unauthenticated relay is retired.
-  void enableSecurity(const String &relayHost = "hyperwisor-realtime-secure.onrender.com",
-                      uint16_t port = 443);
-  /** @deprecated Does nothing. The unauthenticated relay is retired and HSC is
-   *  the only channel; calling this no longer changes behaviour. Remove it. */
-  void disableSecurity();
+  // --- Hyperwisor Secure Channel ---
+  // There is nothing to turn on. begin() generates or loads the device's on-chip
+  // P-256 key, connects to the secure relay and authenticates with a signed
+  // challenge. Security is not a mode the sketch chooses, so there is no API for
+  // choosing it — the only thing worth overriding is where the relay lives.
+
+  /** Point the device at a different relay. Rarely needed; the default is the
+   *  production relay. Call before begin(). */
+  void setRelayHost(const String &relayHost, uint16_t port = 443);
   String getPublicKeyBase64();
   bool registerPublicKey(const String &functionsBaseUrl, const String &userAuthToken);
 
@@ -693,9 +691,12 @@ private:
   nikolaindustryrealtime realtime;
   HyperwisorHSC hsc;
   bool securityEnabled = false;
-  // Always false now: disableSecurity() is a no-op, so begin() always brings
-  // up HSC. Kept only so the branch in begin() reads explicitly.
-  bool _securityDisabled = false;
+  // Where the relay lives. Overridable via setRelayHost(); begin() uses it.
+  String _relayHost = "hyperwisor-realtime-secure.onrender.com";
+  uint16_t _relayPort = 443;
+  /** Brings up HSC. Called by begin() — not part of the public API, because
+   *  security is not optional. */
+  void startSecureChannel();
   WebServer server;
   DNSServer dnsServer;
   HTTPClient http;

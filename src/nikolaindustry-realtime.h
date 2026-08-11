@@ -39,8 +39,7 @@ private:
   // HSC state
   // The secure relay. The old unauthenticated host is switched off, so this
   // is the only endpoint that answers — defaulting to it means a device
-  // cannot end up pointed at a dead server through some path that skips
-  // enableSecurity().
+  // cannot end up pointed at a dead server.
   String _host = "hyperwisor-realtime-secure.onrender.com";
   uint16_t _port = 443;
   bool _hscEnabled = false;

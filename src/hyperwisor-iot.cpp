@@ -12,12 +12,10 @@ HyperwisorIOT::HyperwisorIOT()
 // Public methods
 void HyperwisorIOT::begin()
 {
-  // Secure by default: bring up HSC (on-chip key + secure relay + handshake)
-  // unless the sketch explicitly opted out with disableSecurity(). Must run
-  // before we connect or enter AP provisioning.
-  if (!_securityDisabled && !securityEnabled) {
-    enableSecurity();
-  }
+  // Always secure. Brings up the on-chip key, the relay host and the handshake
+  // before we connect or enter AP provisioning. Not conditional on anything the
+  // sketch did, because there is no unsecured mode to fall back to.
+  if (!securityEnabled) startSecureChannel();
 
   getcredentials();
 
@@ -452,35 +450,27 @@ String HyperwisorIOT::getUserId()
 
 // --- HSC v1 security ------------------------------------------------------
 
-void HyperwisorIOT::enableSecurity(const String &relayHost, uint16_t port)
+void HyperwisorIOT::setRelayHost(const String &relayHost, uint16_t port)
 {
-  _securityDisabled = false;
-  if (securityEnabled) { realtime.setHost(relayHost, port); return; }
+  _relayHost = relayHost;
+  _relayPort = port;
+  // If the channel is already up, move it; otherwise begin() will use this.
+  if (securityEnabled) realtime.setHost(_relayHost, _relayPort);
+}
+
+void HyperwisorIOT::startSecureChannel()
+{
+  if (securityEnabled) return;
   if (!hsc.begin()) {
-    Serial.println("❌ HSC: could not initialize device key — security NOT enabled");
+    Serial.println("❌ HSC: could not initialize device key — cannot connect securely");
     return;
   }
   securityEnabled = true;
-  realtime.setHost(relayHost, port);
+  realtime.setHost(_relayHost, _relayPort);
   realtime.enableHSC([this](const String &nonce, const String &ts) {
     return hsc.signChallenge(getDeviceId(), nonce, ts);
   });
-  Serial.println("🔐 Security enabled — device will authenticate to the secured relay");
-}
-
-void HyperwisorIOT::disableSecurity()
-{
-  // Deliberately does nothing any more.
-  //
-  // This used to drop the device onto the unauthenticated relay. That relay is
-  // switched off, so honouring the call would leave the device connected to
-  // nothing — a silent, hard-to-diagnose failure, since a socket that never
-  // opens is indistinguishable from a network problem.
-  //
-  // The symbol is kept so sketches already in the field still compile; it just
-  // no longer has anywhere to send them. Remove the call.
-  Serial.println("⚠️  disableSecurity() is deprecated and now does nothing.");
-  Serial.println("    The unauthenticated relay is retired; HSC is the only channel.");
+  Serial.println("🔐 Secure channel ready — authenticating to the relay");
 }
 
 String HyperwisorIOT::getPublicKeyBase64()
@@ -492,7 +482,7 @@ bool HyperwisorIOT::registerPublicKey(const String &functionsBaseUrl, const Stri
 {
   String pub = hsc.getPublicKeyBase64();
   if (pub.length() == 0) {
-    Serial.println("❌ HSC: no public key to register (call enableSecurity first)");
+    Serial.println("❌ HSC: no public key to register (call begin() first)");
     return false;
   }
 
