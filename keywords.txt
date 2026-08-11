@@ -1,0 +1,86 @@
+#######################################
+# Syntax Colouring Map for Hyperwisor-IOT
+#
+# Generated from the public sections of the headers, so it stays
+# honest about what a sketch can actually call. Fields are separated
+# by a single TAB, which the Arduino IDE requires — spaces are
+# silently ignored and the entry simply never highlights.
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+HyperwisorIOT	KEYWORD1
+HyperwisorHSC	KEYWORD1
+nikolaindustryrealtime	KEYWORD1
+HeatMapPoint	KEYWORD1
+ThreeDModelUpdate	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+authenticateUser	KEYWORD2
+authenticateUserWithResponse	KEYWORD2
+begin	KEYWORD2
+clearCredentials	KEYWORD2
+deleteDatabaseData	KEYWORD2
+deleteDatabaseDataWithResponse	KEYWORD2
+disableSecurity	KEYWORD2
+enableHSC	KEYWORD2
+enableSecurity	KEYWORD2
+erase	KEYWORD2
+error	KEYWORD2
+getDatabaseData	KEYWORD2
+getDatabaseDataWithResponse	KEYWORD2
+getDeviceId	KEYWORD2
+getNetworkDate	KEYWORD2
+getNetworkDateTime	KEYWORD2
+getNetworkTime	KEYWORD2
+getPublicKeyBase64	KEYWORD2
+getUserId	KEYWORD2
+hasCredentials	KEYWORD2
+hasKeypair	KEYWORD2
+info	KEYWORD2
+initNTP	KEYWORD2
+insertDatainDatabase	KEYWORD2
+insertDatainDatabaseWithResponse	KEYWORD2
+isNikolaindustryRealtimeConnected	KEYWORD2
+loadGPIOState	KEYWORD2
+loop	KEYWORD2
+onboardDevice	KEYWORD2
+onboardDeviceWithResponse	KEYWORD2
+registerPublicKey	KEYWORD2
+restoreAllGPIOStates	KEYWORD2
+saveGPIOState	KEYWORD2
+sendDeviceStatus	KEYWORD2
+sendJson	KEYWORD2
+sendSMS	KEYWORD2
+sendSMSWithResponse	KEYWORD2
+sendTo	KEYWORD2
+send_Sensor_Data_logger	KEYWORD2
+setApiKeys	KEYWORD2
+setCredentials	KEYWORD2
+setDeviceId	KEYWORD2
+setHost	KEYWORD2
+setOnConnectionStatusChange	KEYWORD2
+setOnMessageCallback	KEYWORD2
+setTimezone	KEYWORD2
+setUserCommandHandler	KEYWORD2
+setUserId	KEYWORD2
+setWiFiCredentials	KEYWORD2
+showDialog	KEYWORD2
+signChallenge	KEYWORD2
+success	KEYWORD2
+update3DModel	KEYWORD2
+update3DWidget	KEYWORD2
+updateCountdown	KEYWORD2
+updateDatabaseData	KEYWORD2
+updateDatabaseDataWithResponse	KEYWORD2
+updateFlightAttitude	KEYWORD2
+updateHeatMap	KEYWORD2
+updateWidget	KEYWORD2
+updateWidgetPosition	KEYWORD2
+warning	KEYWORD2
+
