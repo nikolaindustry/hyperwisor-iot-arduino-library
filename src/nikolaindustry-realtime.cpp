@@ -29,6 +29,7 @@ void nikolaindustryrealtime::connect()
       case WStype_CONNECTED:
         Serial.println("🟢 transport socket open");
         _authenticated = false;
+        _warnedPreAuthSend = false;
         if (_hscEnabled) {
           // Do NOT report connected yet — wait for the HSC challenge → auth_ok.
           Serial.println("🔐 HSC: awaiting challenge...");
@@ -38,9 +39,10 @@ void nikolaindustryrealtime::connect()
         }
         break;
       case WStype_DISCONNECTED:
-        Serial.println("🔴 nikolaindustry-realtime disconnected");
+        Serial.println("🔴 relay disconnected");
         _isConnected = false;
         _authenticated = false;
+        _warnedPreAuthSend = false;
         if (onConnectionStatusChange) onConnectionStatusChange(false);
         break;
       case WStype_TEXT:
@@ -69,8 +71,20 @@ void nikolaindustryrealtime::connect()
         break;
     } });
 
-  // Set reconnect interval for automatic reconnection attempts
-  webSocket.setReconnectInterval(5000);
+  // Recovery time after a dropped connection.
+  //
+  // At 5000 a single missed attempt cost eleven seconds of downtime: the first
+  // retry at +5s failed, the second at +10s opened, then SSL and the handshake.
+  // For a device driving a pump or a light, ten seconds of "offline" is the
+  // difference between a glitch and a complaint.
+  //
+  // TRADE-OFF, know it before raising the fleet size: WebSocketsClient has no
+  // exponential backoff, so this interval is fixed. If the relay goes down,
+  // every device retries every two seconds for as long as the outage lasts.
+  // That is fine at today's scale and becomes a thundering herd at thousands of
+  // devices — at which point this needs real backoff (2s, 4s, 8s, capped),
+  // which has to be built rather than configured.
+  webSocket.setReconnectInterval(2000);
   
   // CRITICAL: Enable heartbeat to detect zombie connections
   // Ping every 15 seconds, timeout after 3 seconds, disconnect after 2 failed pongs
@@ -85,7 +99,7 @@ void nikolaindustryrealtime::loop()
   }
 }
 
-void nikolaindustryrealtime::sendJson(const JsonObject &json)
+void nikolaindustryrealtime::sendJsonRaw(const JsonObject &json)
 {
   String output;
   if (serializeJson(json, output))
@@ -96,6 +110,32 @@ void nikolaindustryrealtime::sendJson(const JsonObject &json)
   {
     Serial.println("❌ Failed to serialize JSON!");
   }
+}
+
+void nikolaindustryrealtime::sendJson(const JsonObject &json)
+{
+  // Nothing may go out before the relay has said auth_ok.
+  //
+  // A sketch publishes on its own timer and knows nothing about the handshake,
+  // so a sensor reading regularly landed on the relay in the window between
+  // "sent auth" and "authenticated". The relay treated that stray frame as a
+  // failed handshake and closed the connection, so the device reconnected into
+  // the same race — a loop that looked like the relay rejecting a valid device
+  // (observed 2026-08-20).
+  //
+  // The relay now drops such frames instead of closing, but the device should
+  // not be sending them in the first place: pre-auth the socket is open and
+  // unauthenticated, and anything written to it is guaranteed to be discarded.
+  if (_hscEnabled && !_authenticated)
+  {
+    if (!_warnedPreAuthSend)
+    {
+      _warnedPreAuthSend = true;   // once per connection; a publishing loop must not flood serial
+      Serial.println("⏳ send held: not authenticated yet (frame dropped)");
+    }
+    return;
+  }
+  sendJsonRaw(json);
 }
 
 void nikolaindustryrealtime::sendTo(const String &targetId, std::function<void(JsonObject &)> payloadBuilder)
@@ -152,7 +192,7 @@ void nikolaindustryrealtime::handleChallenge(JsonObject &obj)
   out["type"] = "auth";
   out["deviceId"] = deviceId;
   out["sig"] = sig;
-  sendJson(out.as<JsonObject>());
+  sendJsonRaw(out.as<JsonObject>());   // the auth frame itself — must bypass the pre-auth guard
   Serial.println("🔐 HSC: signed challenge → sent auth");
 }
 

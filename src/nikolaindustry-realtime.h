@@ -48,6 +48,13 @@ private:
   void handleChallenge(JsonObject &obj); // sign + reply
   bool handleHscControl(JsonObject &obj); // returns true if it was an HSC frame
 
+  // Writes to the socket without an authentication check. ONLY the HSC
+  // handshake may use this: it is what sends the auth frame, so it cannot
+  // itself require being authenticated. Everything else must go through
+  // sendJson(), which holds frames until the relay has said auth_ok.
+  void sendJsonRaw(const JsonObject &json);
+  bool _warnedPreAuthSend = false;
+
   std::function<void(JsonObject &)> onMessageCallback;
   std::function<void(bool)> onConnectionStatusChange;
 
