@@ -152,6 +152,11 @@ void nikolaindustryrealtime::setOnMessageCallback(std::function<void(JsonObject 
   onMessageCallback = callback;
 }
 
+void nikolaindustryrealtime::setDeviceFirmware(const String &fw)
+{
+  _deviceFirmware = fw;
+}
+
 void nikolaindustryrealtime::setOnConnectionStatusChange(std::function<void(bool)> callback)
 {
   onConnectionStatusChange = callback;
@@ -208,6 +213,27 @@ bool nikolaindustryrealtime::handleHscControl(JsonObject &obj)
     _authenticated = true;
     _isConnected = true;
     Serial.println("✅ HSC: authenticated");
+
+    // Announce the firmware version before handing control to the sketch.
+    //
+    // Sent once per connection rather than answered on request: the platform
+    // stores it, so the version is known even with no dashboard open, and a
+    // manufacturer can see what a customer's unit is running without needing
+    // permission to command that unit.
+    //
+    // This rides inside the authenticated TLS channel but is NOT covered by the
+    // HSC signature. It is what the firmware believes it is -- a claim, not
+    // proof.
+    if (_deviceFirmware.length() > 0) {
+      DynamicJsonDocument info(128);
+      JsonObject o = info.to<JsonObject>();
+      o["hsc"] = "1";
+      o["type"] = "device_info";
+      o["fw"] = _deviceFirmware;
+      sendJsonRaw(o);
+      Serial.println("📦 HSC: reported fw " + _deviceFirmware);
+    }
+
     if (onConnectionStatusChange) onConnectionStatusChange(true);
     return true;
   }

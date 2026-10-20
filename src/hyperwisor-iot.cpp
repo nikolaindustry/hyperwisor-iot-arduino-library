@@ -19,6 +19,15 @@ void HyperwisorIOT::begin()
 
   getcredentials();
 
+  // Decide what this device will tell the platform it is running. The sketch's
+  // own declaration is preferred: `versionid` comes from NVS, which only an OTA
+  // writes, so after a USB reflash it names firmware that is no longer on the
+  // chip. Reporting nothing is better than reporting that.
+  {
+    String effective = declaredFirmware.length() > 0 ? declaredFirmware : versionid;
+    if (effective.length() > 0) realtime.setDeviceFirmware(effective);
+  }
+
   if (!ssid.isEmpty() && !password.isEmpty())
   {
     connectToWiFi();
@@ -433,6 +442,11 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
 // The transport already tracks this; it was just unreachable. `realtime` is
 // private, so without this forwarder a sketch had no way to learn that the
 // channel had come back — and no way to re-publish state after a reconnect.
+void HyperwisorIOT::setFirmwareVersion(const String &version)
+{
+  declaredFirmware = version;
+}
+
 void HyperwisorIOT::setConnectionStatusHandler(std::function<void(bool)> cb)
 {
   realtime.setOnConnectionStatusChange(cb);

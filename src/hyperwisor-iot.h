@@ -123,6 +123,22 @@ public:
   void setConnectionStatusHandler(std::function<void(bool)> cb);
 
   /**
+   * Declare the firmware version this sketch was built as, e.g. "1.4.0".
+   *
+   * The device announces it once per connection and the platform stores it, so
+   * the dashboard can show what a unit is running without asking it, and a
+   * manufacturer can see the version of a customer's unit without needing
+   * permission to command that unit.
+   *
+   * Call it BEFORE begin(). What a sketch declares wins over the version left
+   * in NVS by the last OTA, because flashing over USB replaces the firmware
+   * without touching NVS -- so NVS alone goes stale and reports a version that
+   * is no longer on the chip. Declare nothing and the NVS value is used; with
+   * neither, the device reports nothing rather than a misleading default.
+   */
+  void setFirmwareVersion(const String &version);
+
+  /**
    * @brief Send custom message to a target device/dashboard
    * 
    * @param targetId Target device ID or dashboard ID to send message to
@@ -721,6 +737,7 @@ private:
   void setupMessageHandler();
   void performOTA(const char *otaUrl);
   void getcredentials();
+  String declaredFirmware;   // set by setFirmwareVersion(); wins over NVS
   void startAPMode();
   void handle_provision();
   void connectToWiFi();

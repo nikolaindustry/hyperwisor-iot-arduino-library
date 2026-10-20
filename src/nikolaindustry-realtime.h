@@ -31,6 +31,12 @@ public:
   // no message delivery) until the relay returns auth_ok.
   void enableHSC(std::function<String(const String &nonce, const String &ts)> signer);
 
+  // Firmware version this device will announce once per connection, in a
+  // `device_info` frame sent immediately after auth_ok. The relay records it so
+  // the platform never has to ask the device what it is running. Empty means
+  // say nothing at all rather than report a misleading default.
+  void setDeviceFirmware(const String &fw);
+
 private:
   WebSocketsClient webSocket;
   String deviceId;
@@ -43,6 +49,7 @@ private:
   String _host = "hyperwisor-realtime-secure.onrender.com";
   uint16_t _port = 443;
   bool _hscEnabled = false;
+  String _deviceFirmware;   // announced after auth_ok; empty = do not announce
   bool _authenticated = false;
   std::function<String(const String &, const String &)> _authSigner;
   void handleChallenge(JsonObject &obj); // sign + reply
