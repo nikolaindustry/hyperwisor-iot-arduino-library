@@ -430,6 +430,14 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
   userCommandCallback = cb;
 }
 
+// The transport already tracks this; it was just unreachable. `realtime` is
+// private, so without this forwarder a sketch had no way to learn that the
+// channel had come back — and no way to re-publish state after a reconnect.
+void HyperwisorIOT::setConnectionStatusHandler(std::function<void(bool)> cb)
+{
+  realtime.setOnConnectionStatusChange(cb);
+}
+
 // Get device ID
 String HyperwisorIOT::getDeviceId()
 {

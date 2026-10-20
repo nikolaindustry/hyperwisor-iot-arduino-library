@@ -107,6 +107,22 @@ public:
   void setUserCommandHandler(UserCommandCallback cb);
 
   /**
+   * @brief Called when the secure channel comes up or goes down.
+   *
+   * `true` means authenticated and ready to send; `false` means the socket
+   * dropped. Use it to re-publish widget state on reconnect — the dashboard
+   * keeps no memory of what it was last told, so without this a reconnected
+   * device shows stale values until something happens to change them.
+   *
+   * ```cpp
+   * device.setConnectionStatusHandler([](bool online) {
+   *   if (online) publishEverything();
+   * });
+   * ```
+   */
+  void setConnectionStatusHandler(std::function<void(bool)> cb);
+
+  /**
    * @brief Send custom message to a target device/dashboard
    * 
    * @param targetId Target device ID or dashboard ID to send message to
