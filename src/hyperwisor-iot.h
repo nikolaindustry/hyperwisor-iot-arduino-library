@@ -139,6 +139,22 @@ public:
   void setFirmwareVersion(const String &version);
 
   /**
+   * Override the provisioning access point's name and password.
+   *
+   * Call it BEFORE begin(). Without it the SSID is "Hyperwisor-XXXXXX", where
+   * XXXXXX is the last three bytes of this chip's MAC, and the password is a
+   * published default.
+   *
+   * THE DEFAULT PASSWORD IS NOT A SECRET. It is compiled into every binary, so
+   * anyone with the library knows it. It exists so a board is reachable out of
+   * the box, not to keep anyone out — the provisioning window is short and the
+   * portal only accepts Wi-Fi credentials. A product that ships to the public
+   * should set its own here, printed on the unit or its box, and treat the
+   * access point as physically rather than cryptographically protected.
+   */
+  void setProvisioningAP(const String &ssid, const String &password);
+
+  /**
    * @brief Send custom message to a target device/dashboard
    * 
    * @param targetId Target device ID or dashboard ID to send message to
@@ -755,8 +771,12 @@ private:
   String apiKey, secretKey;
 
   // AP Mode
-  const char *apSSID = "NIKOLAINDUSTRY_Setup";
-  const char *apPassword = "0123456789";
+  // Provisioning access point. The SSID gets a per-device suffix at startAPMode()
+  // so two unprovisioned boards on one bench are telling apart, and so a customer
+  // joins their own device rather than a neighbour's. See setProvisioningAP().
+  String apSSID = "Hyperwisor-Setup";
+  String apPassword = "0123456789";
+  bool apNameFixed = false;   // true once a sketch has set its own
   String fversion = "0.0.1";
 
   // Retry Logic

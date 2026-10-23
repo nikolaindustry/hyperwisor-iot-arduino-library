@@ -158,8 +158,20 @@ void HyperwisorIOT::startAPMode()
 {
   Serial.println("Starting in AP mode...");
 
+  // Every unit used to advertise the same SSID, so a bench with two
+  // unprovisioned boards offered two identical networks and a customer could
+  // just as easily configure their neighbour's device. Append the last three
+  // bytes of the MAC unless the sketch chose its own name.
+  if (!apNameFixed) {
+    String mac = WiFi.macAddress();      // AA:BB:CC:DD:EE:FF
+    mac.replace(":", "");
+    if (mac.length() >= 6) apSSID += "-" + mac.substring(mac.length() - 6);
+    apNameFixed = true;                  // only ever append once
+  }
+
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(apSSID, apPassword);
+  WiFi.softAP(apSSID.c_str(), apPassword.c_str());
+  Serial.println("AP SSID: " + apSSID);
   Serial.print("AP Started. IP: ");
   Serial.println(WiFi.softAPIP());
 
@@ -445,6 +457,13 @@ void HyperwisorIOT::setUserCommandHandler(UserCommandCallback cb)
 void HyperwisorIOT::setFirmwareVersion(const String &version)
 {
   declaredFirmware = version;
+}
+
+void HyperwisorIOT::setProvisioningAP(const String &ssid, const String &password)
+{
+  apSSID = ssid;
+  apPassword = password;
+  apNameFixed = true;   // keep the sketch's name; do not append a MAC suffix
 }
 
 void HyperwisorIOT::setConnectionStatusHandler(std::function<void(bool)> cb)
