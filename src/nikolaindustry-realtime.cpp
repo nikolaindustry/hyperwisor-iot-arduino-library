@@ -43,6 +43,7 @@ void nikolaindustryrealtime::connect()
         _isConnected = false;
         _authenticated = false;
         _warnedPreAuthSend = false;
+        scheduleReconnect(_authRejected ? "rejected" : "closed");
         if (onConnectionStatusChange) onConnectionStatusChange(false);
         break;
       case WStype_TEXT:
@@ -110,6 +111,48 @@ void nikolaindustryrealtime::sendJsonRaw(const JsonObject &json)
   {
     Serial.println("❌ Failed to serialize JSON!");
   }
+}
+
+/* Pace the next reconnect, and spread it across the fleet.
+ *
+ * Two cases, deliberately different:
+ *
+ *   rejected  The relay answered and said it does not know us. That is almost
+ *             always onboarding in flight -- the credential row lands seconds
+ *             later -- so retry soon and do NOT escalate.
+ *
+ *   anything  The host is unreachable or the link broke. Exponential backoff,
+ *   else      2s, 4s, 8s ... capped at 60s.
+ *
+ * The jitter is the part that matters at scale. It is a random point in
+ * [target/2, target*3/2) -- a window as wide as the wait itself -- rather than
+ * the flat 2s this used to retry on forever. A fixed interval means that
+ * anything dropping the whole fleet at once has every device retrying in
+ * lockstep, and the storm never thins because the interval never grows. A
+ * window that widens with the delay puts the biggest spread exactly where it
+ * is needed, since a long backoff means a long outage means the biggest herd.
+ *
+ * It is also no slower in the common case: a device recovering from a blip is
+ * on attempt 0, which is 1-3s, and a completed handshake resets the counter.
+ */
+void nikolaindustryrealtime::scheduleReconnect(const char *why)
+{
+  const uint32_t base = 2000;
+  const uint32_t cap  = 60000;
+
+  uint32_t target;
+  if (_authRejected) {
+    target = 5000;                 /* flat; the credential row is imminent */
+  } else {
+    target = base << _reconnectAttempt;
+    if (target > cap) target = cap;
+    if (_reconnectAttempt < 5) _reconnectAttempt++;
+  }
+
+  uint32_t delay = target / 2 + (uint32_t)random(target);
+  webSocket.setReconnectInterval(delay);
+  Serial.printf("⏳ next reconnect in %lums (%s, attempt %u)\n",
+                (unsigned long)delay, why, (unsigned)_reconnectAttempt);
 }
 
 void nikolaindustryrealtime::sendJson(const JsonObject &json)
@@ -210,6 +253,8 @@ bool nikolaindustryrealtime::handleHscControl(JsonObject &obj)
     return true;
   }
   if (strcmp(t, "auth_ok") == 0) {
+    _authRejected = false;
+    _reconnectAttempt = 0;        /* only a completed handshake counts as success */
     _authenticated = true;
     _isConnected = true;
     Serial.println("✅ HSC: authenticated");
@@ -240,6 +285,10 @@ bool nikolaindustryrealtime::handleHscControl(JsonObject &obj)
   if (strcmp(t, "auth_fail") == 0) {
     Serial.printf("❌ HSC: auth rejected: %s\n", obj["reason"] | "unknown");
     _authenticated = false;
+    /* The relay closes right after this. Remember WHY, so the retry is paced
+     * for "my credentials are seconds away" rather than "the host is down" --
+     * 'unknown device' almost always means onboarding is still in flight. */
+    _authRejected = true;
     return true;
   }
   return false;

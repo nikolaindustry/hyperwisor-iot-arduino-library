@@ -62,6 +62,17 @@ private:
   void sendJsonRaw(const JsonObject &json);
   bool _warnedPreAuthSend = false;
 
+  /* Reconnect backoff.
+   *
+   * setReconnectInterval() was a flat 2s, forever, with no jitter. Fine for
+   * one device on a bench; at fleet scale it is the worst failure mode in the
+   * platform. Anything that drops every device at once -- a relay restart, an
+   * upstream blip -- has them all retrying every 2 seconds in lockstep, and
+   * the storm never thins out because the interval never grows. */
+  uint8_t  _reconnectAttempt = 0;
+  bool     _authRejected     = false;   /* the relay said no, vs the link died */
+  void     scheduleReconnect(const char *why);
+
   std::function<void(JsonObject &)> onMessageCallback;
   std::function<void(bool)> onConnectionStatusChange;
 
