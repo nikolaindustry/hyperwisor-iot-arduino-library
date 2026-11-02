@@ -1,2 +1,12 @@
 .DS_Store
 **/.DS_Store
+
+# Editor and tool state. Neither belongs in a published library: Arduino
+# Library Manager packages the whole repository, so anything tracked here is
+# downloaded by every user who installs Hyperwisor-IOT.
+#
+# .vscode also carried machine-specific include paths, and .qoder/repowiki was
+# 916 KB of generated API docs — a second, unmaintained description of this
+# library that would drift from the README and contradict it.
+.vscode/
+.qoder/

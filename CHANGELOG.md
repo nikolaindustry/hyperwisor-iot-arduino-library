@@ -6,6 +6,22 @@ exist in this repository but never reached anyone installing from Library
 Manager. Updating from 3.0.0 therefore brings four releases at once, including
 a security fix.
 
+## 3.3.2
+
+Packaging. The library people download is now a third of the size.
+
+Arduino Library Manager packages the whole repository, so anything tracked
+here is downloaded by everyone who installs Hyperwisor-IOT. Two directories
+were riding along:
+
+- `.qoder/repowiki/` — 916 KB of generated API documentation across 28 files.
+  Besides the weight, it was a second and unmaintained description of this
+  library, certain to drift from the README and contradict it.
+- `.vscode/` — editor configuration, including a hardcoded `/Users/user`
+  include path. Machine-specific, and useless to anyone else.
+
+Both are untracked and ignored now. Nothing in `src/` changed.
+
 ## 3.3.1
 
 Documentation only; no code change.
