@@ -6,6 +6,23 @@ exist in this repository but never reached anyone installing from Library
 Manager. Updating from 3.0.0 therefore brings four releases at once, including
 a security fix.
 
+## 3.3.1
+
+Documentation only; no code change.
+
+- The Library Manager description named **nikolaindustry-realtime** as the
+  transport. That service was retired on 2026-07-30 and has since been
+  repurposed for unrelated work, so the listing was pointing users at a system
+  that is no longer part of this platform. The library itself has always
+  connected to the correct secure relay.
+- The README linked twice to `github.com/your-org/nikolaindustry-realtime`, a
+  placeholder that was never a real address.
+- Rewrote the README around what a developer actually needs: how a device gets
+  onto an account, how commands arrive, what reconnection now does, and the
+  API in one table. The full licence text is linked rather than inlined, and
+  the invitation to send pull requests is gone — it contradicted a licence that
+  does not permit derivative works.
+
 ## 3.3.0
 
 **Reconnects back off, and spread across a fleet.**

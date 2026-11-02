@@ -1,57 +1,96 @@
+# Hyperwisor IoT — Arduino Library
 
-[![Platform](https://img.shields.io/badge/hyperwisor%20IoT%20platform-black?style=for-the-badge&logo=nodedotjs)](https://www.hyperwisor.com/)
-[![Platform](https://img.shields.io/badge/espressif%20esp32%20patform-gray?style=for-the-badge&logo=espressif)](https://www.espressif.com/en/products/socs/esp32)
-# Hyperwisor-IOT Arduino Library
-[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
-[![Status](https://img.shields.io/badge/status-In--Development-yellow)]()
-[![Arduino](https://img.shields.io/badge/Arduino%20IDE-%3E%3D1.8-blue)](https://www.arduino.cc/en/software)
+[![Arduino Library Manager](https://img.shields.io/badge/Arduino%20Library%20Manager-3.3.0-00979D?style=flat-square&logo=arduino&logoColor=white)](https://www.arduino.cc/reference/en/libraries/)
+[![Platform](https://img.shields.io/badge/platform-ESP32-E7352C?style=flat-square&logo=espressif&logoColor=white)](https://www.espressif.com/en/products/socs/esp32)
+[![Secure channel](https://img.shields.io/badge/identity-ECDSA%20P--256-2F6F4E?style=flat-square)](#security)
+[![License](https://img.shields.io/badge/license-proprietary-6B7280?style=flat-square)](License.md)
 
-**Hyperwisor IOT** is a powerful abstraction layer for ESP32-based IoT devices. It handles Wi-Fi provisioning, real-time communication, OTA updates, and GPIO management out of the box. Built on top of the [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime) protocol, it helps developers build smart, connected devices with minimal code.
+Connect an ESP32 to the [Hyperwisor](https://www.hyperwisor.com/) platform in a
+few lines. The library handles Wi-Fi provisioning, an authenticated real-time
+channel, OTA updates, GPIO control and JSON command execution, so a sketch can
+be about the product rather than the plumbing.
 
-**Hyperwisor IOT** is a robust abstraction layer for **ESP32-based IoT devices**, enabling:
-
-- Seamless Wi-Fi provisioning
-- Real-time communication
-- OTA firmware updates
-- GPIO & task management
-- Persistent configuration
-- Fully structured JSON command execution
-
-Built on the powerful [`nikolaindustry-realtime`](https://github.com/your-org/nikolaindustry-realtime) protocol.
-
-## 📦 Features
-
-* 🚀 Automatic Wi-Fi connection using stored credentials
-* 📶 AP-mode fallback + web-based provisioning page
-* 🌐 Real-time communication using `nikolaindustry-realtime`
-* 📩 Built-in JSON command parser with custom extensibility
-* 🛠️ GPIO control via commands (`pinMode`, `digitalWrite`)
-* 🔁 Continuous background loop with nikolaindustry-realtime + HTTP handling
-* 🔧 User command handler support via lambda functions
-* 🌍 Built-in DNS redirection when in AP mode
-* 🔄 OTA firmware update with version tracking
-* 🧠 Smart command routing via `from` → `sendTo()` pairing
-* ✅ Command response feedback through real-time socket
-* 🔐 Preferences-based persistent storage
-* 🛡️ **Secure by default** — unique on-chip P-256 device identity (Hyperwisor Secure Channel)
+Every device holds a **unique ECDSA P-256 keypair generated on-chip**. The
+private key never leaves the ESP32, and the device proves its identity to the
+Hyperwisor Secure Channel before any data flows.
 
 ---
 
-## 🔧 Installation
+## Install
 
-1. Clone or download this repository.
-2. Place the folder into your Arduino `libraries/` directory.
-3. Include the library in your sketch:
+**Arduino IDE** — Tools → Manage Libraries, search `Hyperwisor-IOT`, install.
 
-   ```cpp
-   #include <hyperwisor-iot.h>
-   ```
+**arduino-cli**
 
+```bash
+arduino-cli lib install Hyperwisor-IOT
+```
 
+You also need the ESP32 board package (`esp32` by Espressif Systems) and two
+libraries, both from Library Manager:
 
-## 🌐 Command Structure
+| Library | Author |
+|---|---|
+| [ArduinoJson](https://arduinojson.org/) | Benoit Blanchon |
+| [WebSockets](https://github.com/Links2004/arduinoWebSockets) | Markus Sattler |
 
-Supports rich JSON messages from the server:
+Everything else — `WiFi`, `WebServer`, `HTTPClient`, `WiFiClientSecure`,
+`Preferences`, `Update`, `DNSServer`, `Wire` — ships with the ESP32 board
+package.
+
+---
+
+## Quick start
+
+```cpp
+#include <hyperwisor-iot.h>
+
+HyperwisorIOT device;
+
+void setup() {
+  Serial.begin(115200);
+  device.begin();                       // Wi-Fi, identity, secure channel
+  Serial.println("Device ID: " + device.getDeviceId());
+}
+
+void loop() {
+  device.loop();                        // keeps the connection alive
+}
+```
+
+That is a complete, connectable device. `begin()` restores saved credentials,
+brings up the on-chip key and authenticates; `loop()` pumps messages and drives
+reconnection.
+
+---
+
+## Getting a device onto your account
+
+A device cannot simply connect. The relay only accepts devices whose public key
+is registered to an account, so the first boot goes through provisioning:
+
+1. **First boot** — no stored credentials, so the device raises its own access
+   point (`NIKOLAINDUSTRY_Setup…`, password `0123456789`) and serves a setup
+   page at `192.168.4.1`.
+2. **Hand over Wi-Fi** — the Hyperwisor mobile app sends your network details to
+   that page. The device replies with its **public key**, and the app registers
+   it against your account.
+3. **Restart** — the device joins your network and authenticates on the secure
+   channel.
+
+> A device flashed with Wi-Fi credentials already in NVS skips provisioning,
+> never registers its key, and is refused as `unknown device`. Re-provision it
+> through the app to fix this. There is no insecure fallback to wait for.
+
+Change the access point with `setProvisioningAP()` before `begin()` if the
+defaults do not suit your product.
+
+---
+
+## Receiving commands
+
+The platform sends structured JSON. One message may carry several commands, each
+with several actions:
 
 ```json
 {
@@ -61,14 +100,7 @@ Supports rich JSON messages from the server:
       {
         "command": "GPIO_MANAGEMENT",
         "actions": [
-          {
-            "action": "ON",
-            "params": {
-              "gpio": 12,
-              "pinmode": "OUTPUT",
-              "status": "HIGH"
-            }
-          }
+          { "action": "ON", "params": { "gpio": 12, "pinmode": "OUTPUT", "status": "HIGH" } }
         ]
       }
     ]
@@ -76,153 +108,127 @@ Supports rich JSON messages from the server:
 }
 ```
 
-## 🧠 Internals
+`GPIO_MANAGEMENT` and OTA are handled for you. Anything else reaches your
+handler:
 
-On `hyper.begin()`:
+```cpp
+device.setUserCommandHandler([](const String &from, JsonObject &cmd) {
+  String command = cmd["command"].as<String>();
+  if (command == "relay_control") {
+    // act on cmd["actions"], then reply to `from`
+  }
+});
+```
 
-1. Tries to connect to saved Wi-Fi
-2. Starts AP-mode if not configured
-3. Sets up DNS and HTTP provisioning
-4. Initializes nikolaindustry-realtime connection
-5. Loads `deviceid`, `ssid`, `email`, `productid`, and `versionid` from `Preferences`
-6. Registers default and user-provided command handlers
+Replies and telemetry go back the same way:
+
+```cpp
+device.sendTo(from, [&](JsonObject &p) {
+  p["status"] = "ok";
+  p["relay"]  = 3;
+});
+```
 
 ---
 
-## 🔐 Security (Hyperwisor Secure Channel)
+## Connection behaviour
 
-**As of v2.0.0, security is ON by default.** Each device generates a unique
-**ECDSA P‑256 keypair on‑chip** (stored in NVS). The **private key never leaves the
-device** — only the public key is ever shared. On connect, the device proves its
-identity to the Hyperwisor secure relay with a challenge–response handshake, so
-nobody can impersonate your hardware.
+Since **3.3.0** reconnection backs off and spreads, rather than retrying at a
+fixed interval.
 
-### What you get for free
-- `hyper.begin()` **automatically enables** the secure channel — no extra code.
-- The device connects to the secure relay and **authenticates before any data flows**.
-- The keypair is generated once and persisted in NVS; regular reboots keep the same identity.
+| Situation | What happens |
+|---|---|
+| Ordinary drop | Retry after 1–3 s, then 2 s, 4 s, 8 s … capped at 60 s |
+| Jitter | Each retry lands at a random point in a window as wide as the wait |
+| Identity rejected | Flat 5 s retry, no escalation |
+| Handshake completes | The backoff resets — only `auth_ok` counts as success |
 
-### Onboarding registers the public key
-During Wi‑Fi provisioning, the device hands its **public key** back to the Hyperwisor
-app (in the provisioning acknowledgment). The app registers it to your account so the
-relay knows the device is really yours.
+The jitter matters once more than one device exists. A fixed interval means
+every device reconnects in lockstep after a server restart, and the resulting
+burst keeps the server down. A window that widens with the delay puts the
+largest spread exactly where the crowd is biggest.
 
-> **Important:** a device must be **onboarded through the Hyperwisor app** for its key
-> to be registered. A freshly flashed device that connects straight to saved Wi‑Fi
-> (skipping provisioning) won't have its key registered yet and will be rejected as
-> `unknown device` until you (re‑)provision it.
+On a single device this is a trade: after a long outage, recovery can take up to
+about 90 seconds instead of retrying every 2. An ordinary blip is unaffected.
 
-### API
+Watch it on the serial monitor:
 
-There is no security API, because security is not a choice the sketch makes.
-`begin()` brings up the on-chip key, connects to the relay and authenticates.
+```
+🔴 relay disconnected
+⏳ next reconnect in 3184ms (closed, attempt 1)
+🔐 HSC: signed challenge → sent auth
+🔐 HSC: authenticated
+```
+
+---
+
+## Security
+
+Security is not a setting. `begin()` generates (or loads) the device's P-256
+keypair in NVS, connects to the Hyperwisor Secure Channel and completes a
+challenge–response handshake before the sketch can send anything.
+
+- The **private key never leaves the chip**. Only the public key is ever shared.
+- The keypair survives reboots and OTA updates, so the identity is stable.
+- Frames written before the handshake finishes are held rather than sent, so a
+  publishing loop that starts early cannot break the connection.
+
+```cpp
+device.getPublicKeyBase64();   // base64 raw P-256, safe to print or copy
+device.getDeviceId();
+```
+
+---
+
+## API
 
 | Method | Purpose |
-|--------|---------|
-| `hyper.begin()` | Everything above, automatically. |
-| `hyper.getPublicKeyBase64()` | The device's public key (base64 raw P‑256). |
-| `hyper.getDeviceId()` | The device's ID. |
-| `hyper.setRelayHost("host", port)` | Point at a different relay. Rarely needed; call before `begin()`. |
-
-### Upgrading from v2.x (breaking change)
-
-`enableSecurity()` and `disableSecurity()` are **gone**.
-
-They existed when unauthenticated connections were still possible. They aren't,
-so an API that appears to offer the choice is misleading — and `disableSecurity()`
-in particular would have pointed a device at a relay that no longer exists.
-
-- Calling `disableSecurity()` → delete the line. Security is automatic.
-- Calling `enableSecurity("host", port)` → use `setRelayHost("host", port)`.
-- Calling `enableSecurity()` with no arguments → delete the line; `begin()` does it.
-
-A device must have its **public key registered** to connect at all, which happens
-when it is onboarded through the Hyperwisor app. Devices never onboarded that way
-are rejected as `unknown device` until you re-provision them. There is no fallback
-to wait behind.
-
-OTA updates are unaffected.
+|---|---|
+| `begin()` | Credentials, identity, secure channel, command handlers |
+| `loop()` | Pump messages and drive reconnection. Call every iteration |
+| `setUserCommandHandler(cb)` | Handle commands the library does not |
+| `setConnectionStatusHandler(cb)` | `true` on `auth_ok`, `false` on disconnect |
+| `sendTo(targetId, builder)` | Send a JSON payload to a peer |
+| `send_Sensor_Data_logger(targetId, configId, {…})` | Push readings to a data logger |
+| `setFirmwareVersion(v)` | Report a version the platform can compare for OTA |
+| `setProvisioningAP(ssid, password)` | Name the setup access point |
+| `setCredentials(ssid, pass, deviceId, userId)` | Set credentials in code |
+| `hasCredentials()` / `clearCredentials()` | Inspect or wipe stored credentials |
+| `saveGPIOState(pin, state)` / `restoreAllGPIOStates()` | Persist outputs across reboots |
+| `getDeviceId()` / `getUserId()` / `getPublicKeyBase64()` | Identity |
+| `setRelayHost(host, port)` | Point at a different relay. Call before `begin()` |
 
 ---
 
-## 📚 Dependencies
+## Upgrading from 2.x
 
-### Required: Install via Arduino Library Manager
-These libraries must be installed before using Hyperwisor-IOT:
+`enableSecurity()` and `disableSecurity()` were removed in 3.0.0. They existed
+when unauthenticated connections were still possible; they are not, so an API
+offering the choice was misleading.
 
-| Library | Author | Install via |
-|---------|--------|-------------|
-| [ArduinoJson](https://arduinojson.org/) | Benoit Blanchon | Library Manager |
-| [WebSockets](https://github.com/Links2004/arduinoWebSockets) | Markus Sattler | Library Manager |
+- `disableSecurity()` → delete the line.
+- `enableSecurity("host", port)` → `setRelayHost("host", port)`.
+- `enableSecurity()` → delete the line; `begin()` does it.
 
-**How to install:**
-1. Open Arduino IDE
-2. Go to **Sketch → Include Library → Manage Libraries...**
-3. Search for `ArduinoJson` and click **Install**
-4. Search for `WebSockets` and click **Install**
-
-### Required: ESP32 Board Package
-This library only works with ESP32. Install the ESP32 board package:
-1. Go to **File → Preferences**
-2. Add this URL to "Additional Board Manager URLs":
-   ```
-   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-   ```
-3. Go to **Tools → Board → Boards Manager...**
-4. Search for `esp32` and install **esp32 by Espressif Systems**
-
-### Built-in (No installation needed)
-These libraries come with the ESP32 board package:
-- WiFi, WebServer, HTTPClient, WiFiClientSecure
-- Preferences, Update, DNSServer, Wire
-
-
-
-## 🧾 License
-
-# Hyperwisor IoT Arduino Library License
-
-Copyright (c) 2025 NIKOLAINDUSTRY
-
-## License Type: Proprietary - All Rights Reserved
-
-This software and associated files (the "Library") are the exclusive property of **NIKOLAINDUSTRY**. You are **NOT** permitted to copy, modify, distribute, sublicense, or reverse engineer any part of this code without express written permission from NIKOLAINDUSTRY.
-
-### You MAY:
-- Use this Library **exclusively** with NIKOLAINDUSTRY hardware or software platforms.
-- Integrate the Library into closed-source commercial or industrial applications developed **in partnership with** NIKOLAINDUSTRY.
-- Contact NIKOLAINDUSTRY for licensing terms to enable distribution or broader use.
-
-### You MAY NOT:
-- Redistribute, sell, sublicense, or disclose this Library or any derivative works.
-- Modify or decompile the source code for any purpose other than evaluation or integration with authorized systems.
-- Use this Library in any open-source project, public-facing repository, or third-party product without prior written approval.
-
-## Disclaimers
-
-- **NO WARRANTY**: This software is provided "as is" without any warranties of any kind, whether express or implied, including but not limited to warranties of merchantability or fitness for a particular purpose.
-
-- **NO LIABILITY**: In no event shall NIKOLAINDUSTRY, its employees, or its affiliates be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including hardware damage, data loss, or system failure) arising in any way from the use or inability to use this Library.
-
-- **NOT FOR CRITICAL SYSTEMS**: This Library is **not certified** for use in life-support, nuclear, military, or other safety-critical systems. Use in such environments is **strictly prohibited**.
-
-## Enforcement
-
-Unauthorized use, duplication, or distribution of this Library may result in civil and criminal penalties and will be prosecuted to the maximum extent possible under law.
+OTA is unaffected. See [CHANGELOG.md](CHANGELOG.md) — releases 3.0.1 through
+3.2.0 were never published to Library Manager, so an update from 3.0.0 brings
+four versions at once, including a provisioning security fix.
 
 ---
 
-For commercial licensing, OEM partnerships, or distribution rights, contact:
+## Licence
 
-**NIKOLAINDUSTRY**  
-Email: support@nikolaindustry.com  
-Website: [https://nikolaindustry.com](https://nikolaindustry.com)
----
+Proprietary — © NIKOLAINDUSTRY. The library is licensed for use **with the
+Hyperwisor platform and NIKOLAINDUSTRY hardware**; redistribution,
+sublicensing and derivative works are not permitted without written
+permission. Provided without warranty, and **not certified for life-support,
+nuclear, military or other safety-critical systems**.
 
-## 🤝 Contribute
+Full terms: [License.md](License.md). For commercial licensing, OEM
+partnerships or distribution rights: **support@nikolaindustry.com**.
 
-Suggestions, bug fixes, and pull requests are welcome. Help evolve the library to support more protocols and automation use-cases!
+## Issues
 
----
-
-
+Bug reports and reproducible test cases are welcome through GitHub issues.
+Because the licence does not permit derivative works, please open an issue
+rather than a pull request, and we will take it from there.
