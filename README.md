@@ -69,6 +69,22 @@ reconnection.
 A device cannot simply connect. The relay only accepts devices whose public key
 is registered to an account, so the first boot goes through provisioning:
 
+```mermaid
+flowchart TD
+    A([Power on]) --> B{Credentials<br/>in NVS?}
+    B -- no --> C[Raises its own access point<br/>setup page at 192.168.4.1]
+    C --> D[App sends Wi-Fi<br/>device returns its public key]
+    D --> E[App registers the key<br/>against your account]
+    E --> F([Restart])
+    F --> G[Joins your Wi-Fi]
+    B -- yes --> G
+    G --> H[Challenge, signed, auth_ok]
+    H -- key registered --> I([Connected])
+    H -- key not registered --> J[Refused: unknown device]
+    J -. no access point is raised<br/>re-provision through the app .-> C
+```
+
+
 1. **First boot** — no stored credentials, so the device raises its own access
    point (`NIKOLAINDUSTRY_Setup…`, password `0123456789`) and serves a setup
    page at `192.168.4.1`.
@@ -84,6 +100,31 @@ is registered to an account, so the first boot goes through provisioning:
 
 Change the access point with `setProvisioningAP()` before `begin()` if the
 defaults do not suit your product.
+
+---
+
+## How a message flows
+
+Everything the library sends is addressed to a `targetId`. Inside a command
+handler that value is `msg["from"]` - the dashboard that asked - so a reply, a
+widget update and a dialog all go back to wherever the command came from.
+
+```mermaid
+flowchart LR
+    DASH[Dashboard<br/>or mobile app]
+    RELAY((Hyperwisor<br/>Secure Channel))
+    HANDLER["setUserCommandHandler()<br/>your sketch"]
+    OUT["sendTo, updateWidget<br/>info, warning<br/>send_Sensor_Data_logger"]
+
+    DASH -- command --> RELAY
+    RELAY -- msg --> HANDLER
+    HANDLER -- from becomes targetId --> OUT
+    OUT -- payload --> RELAY
+    RELAY --> DASH
+```
+
+Hold that one idea and the rest of the API follows: **the thing you received
+from is the thing you send to.**
 
 ---
 

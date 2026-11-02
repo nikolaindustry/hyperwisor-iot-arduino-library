@@ -6,6 +6,23 @@ exist in this repository but never reached anyone installing from Library
 Manager. Updating from 3.0.0 therefore brings four releases at once, including
 a security fix.
 
+## 3.3.4
+
+Two diagrams, because some of this is a shape rather than a list.
+
+- **Getting connected** — the whole lifecycle, including the branch that
+  catches people: a device whose key was never registered is refused as
+  `unknown device`, and because it has credentials it will *not* raise its
+  access point again. The dotted edge back to provisioning is a manual step,
+  and the diagram says so rather than implying it recovers on its own.
+- **How a message flows** — dashboard to relay to handler, and back. It exists
+  to teach one idea that the API list cannot: the thing you received `from` is
+  the thing you send `to`. Once that lands, widgets, dialogs, the data logger
+  and the database all stop looking like separate APIs.
+
+Mermaid, so GitHub renders it inline and it cannot drift from the repository
+the way an exported image would. Both verified rendering before release.
+
 ## 3.3.3
 
 Documentation. The README now covers the whole API, not a tenth of it.
