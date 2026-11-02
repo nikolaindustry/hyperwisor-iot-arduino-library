@@ -6,6 +6,29 @@ exist in this repository but never reached anyone installing from Library
 Manager. Updating from 3.0.0 therefore brings four releases at once, including
 a security fix.
 
+## 3.3.3
+
+Documentation. The README now covers the whole API, not a tenth of it.
+
+Roughly forty public methods existed and five were documented. Widgets, the
+platform database, network time, dialogs and the data logger were all absent,
+so the only way to find them was to read the header.
+
+- **Dashboard widgets** — all five `updateWidget()` overloads, plus countdown,
+  flight attitude, heat map, the 3D viewer and widget positioning, with the
+  `HeatMapPoint` and `ThreeDModelUpdate` structs written out.
+- **Dialogs** — `info`, `success`, `warning`, `error`, `risk`, `showDialog`.
+- **Telemetry and storage** — the data logger and the four database calls.
+  `getDatabaseData()` is asynchronous; its rows arrive at the command handler,
+  which was not obvious and is now stated.
+- **Network time** — and that `initNTP()` is not called for you.
+- **GPIO persistence, identity, configuration, platform services.**
+
+Also corrects an error introduced in 3.3.1: the command-handler example had the
+wrong signature. `setUserCommandHandler()` takes `void(JsonObject &msg)` — the
+whole message, from which you read `from` and `payload` — not a per-command
+callback. The example now matches `examples/CommandHandler`.
+
 ## 3.3.2
 
 Packaging. The library people download is now a third of the size.
